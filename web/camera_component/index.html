@@ -190,8 +190,12 @@
         let currentStream = null;
         let useFrontCamera = false; // Default to rear camera on mobile
         
-        // Setup Streamlit sizing
-        Streamlit.setFrameHeight(530);
+        // Setup Streamlit component integration
+        function onRender(event) {
+            Streamlit.setFrameHeight(540);
+        }
+        Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);
+        Streamlit.setComponentReady();
 
         function stopMediaTracks() {
             if (currentStream) {
