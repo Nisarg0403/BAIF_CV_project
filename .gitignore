@@ -1,0 +1,23 @@
+# Datasets (Ignore all large local dataset images)
+data/bristol/
+data/processed/
+data/smartphone_pilot/
+data/baif/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+.pytest_cache/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# OS files
+.DS_Store
+Thumbs.db
