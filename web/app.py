@@ -14,11 +14,6 @@ import base64
 from src.segmentation.segment import CowSegmenter
 from src.features.morphometry import extract_morphometric_features
 
-# Declare the custom camera component
-parent_dir = os.path.dirname(os.path.abspath(__file__))
-camera_dir = os.path.join(parent_dir, "camera_component")
-custom_camera = components.declare_component("custom_camera", path=camera_dir)
-
 # Set page config for a premium wide-layout dashboard
 st.set_page_config(
     page_title="BAIF Cattle Weight Estimator",
@@ -66,6 +61,28 @@ st.markdown("""
         text-align: center;
         text-transform: uppercase;
         letter-spacing: 0.05em;
+    }
+    
+    /* Native Camera Cow Silhouette Overlay */
+    div[data-testid="stCameraInput"] {
+        position: relative !important;
+        border: 2px dashed #3b82f6 !important;
+        border-radius: 12px !important;
+        overflow: hidden !important;
+    }
+    div[data-testid="stCameraInput"]::after {
+        content: "" !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        pointer-events: none !important;
+        background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 640 480' xmlns='http://www.w3.org/2000/svg'><path d='M120 220 C100 210, 80 180, 70 190 C60 200, 70 230, 80 240 C90 250, 110 240, 120 250 C130 260, 140 280, 150 280 C160 280, 170 200, 190 190 C210 180, 280 170, 350 170 C420 170, 460 180, 480 200 C500 220, 520 230, 520 250 C520 270, 510 280, 520 300 C525 310, 530 310, 525 330 C520 350, 490 350, 480 340 C470 330, 470 280, 460 270 C450 260, 390 265, 360 270 L360 380 C360 395, 345 395, 340 380 L340 280 C300 280, 250 280, 220 280 L220 380 C220 395, 205 395, 200 380 L200 270 C170 260, 140 245, 120 220 Z' fill='none' stroke='%2310b981' stroke-width='3' stroke-dasharray='8,6' opacity='0.75' /><rect x='70' y='160' width='100' height='150' fill='none' stroke='%23ef4444' stroke-width='1.5' stroke-dasharray='4,4' opacity='0.5' /><text x='120' y='150' font-size='11' fill='%23ef4444' font-weight='bold' text-anchor='middle' opacity='0.7'>ZONE 1: HEAD</text><rect x='200' y='140' width='220' height='260' fill='none' stroke='%2310b981' stroke-width='1.5' stroke-dasharray='4,4' opacity='0.5' /><text x='310' y='130' font-size='11' fill='%2310b981' font-weight='bold' text-anchor='middle' opacity='0.7'>ZONE 2: TORSO/GIRTH</text><rect x='440' y='160' width='100' height='200' fill='none' stroke='%233b82f6' stroke-width='1.5' stroke-dasharray='4,4' opacity='0.5' /><text x='490' y='150' font-size='11' fill='%233b82f6' font-weight='bold' text-anchor='middle' opacity='0.7'>ZONE 3: RUMP</text><circle cx='310' cy='240' r='10' fill='none' stroke='%23ffffff' stroke-width='1' opacity='0.4' /><line x1='290' y1='240' x2='330' y2='240' stroke='%23ffffff' stroke-width='1' opacity='0.4' /><line x1='310' y1='220' x2='310' y2='260' stroke='%23ffffff' stroke-width='1' opacity='0.4' /></svg>") !important;
+        background-size: contain !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
+        z-index: 10 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -137,13 +154,15 @@ def main():
             input_file = uploaded_file
             
     with tab2:
-        # Renders the custom camera component iframe (with live video feed and cow outline overlay)
-        camera_data = custom_camera()
-        if camera_data:
-            # Decode base64 image data sent from the custom component
-            header, encoded = camera_data.split(",", 1)
-            image_data = base64.b64decode(encoded)
-            input_file = BytesIO(image_data)
+        st.info("💡 **Camera Capture Protocol Checklist:**\n"
+                "* **Perpendicular View**: Stand perpendicular to the side of the cow.\n"
+                "* **Standardized Distance**: Position yourself at the standard distance (e.g. 2.5m).\n"
+                "* **Full Body Visible**: Head, legs, and tail must all be inside the camera frame.\n"
+                "* **Standing Posture**: Cow must be standing naturally, not sitting or bending.")
+        
+        camera_file = st.camera_input("Snap a picture of the cow...")
+        if camera_file is not None:
+            input_file = camera_file
             
     if input_file is not None:
         # Load and decode image
