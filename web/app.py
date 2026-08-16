@@ -75,9 +75,14 @@ def load_segmenter():
 def load_regressor():
     model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models", "best_weight_regressor.pkl"))
     if not os.path.exists(model_path):
+        st.error(f"Model file not found at path: {model_path}")
         return None
-    with open(model_path, 'rb') as f:
-        return pickle.load(f)
+    try:
+        with open(model_path, 'rb') as f:
+            return pickle.load(f)
+    except Exception as e:
+        st.error(f"Failed to load pickle model: {e}")
+        return None
 
 def load_image_for_display(uploaded_file):
     """
@@ -193,7 +198,9 @@ def main():
     
     if model is None:
         st.error("Error: Trained model weights file not found. Please run `python -m src.models.train` in the workspace first.")
-        # Initialize session state variables to hold 4 images
+        return
+        
+    # Initialize session state variables to hold 4 images
     if 'photo_head' not in st.session_state: st.session_state.photo_head = None
     if 'photo_side' not in st.session_state: st.session_state.photo_side = None
     if 'photo_back' not in st.session_state: st.session_state.photo_back = None
