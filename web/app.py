@@ -177,7 +177,7 @@ def main():
 
     # 4. Multi-View Acquisition Workspace
     st.markdown("### 📸 Multi-View Cattle Image Acquisition")
-    st.write("Acquire 4 distinct views of the cattle structure. Weight estimation requires at least one side view (Left or Right).")
+    st.write("Capture or upload the 4 required views of the cattle. Tapping 'Browse files' on mobile will open your phone's native camera.")
     
     tab_head, tab_side, tab_back, tab_other_side = st.tabs([
         "👤 1. Head Area (Front)",
@@ -188,10 +188,8 @@ def main():
     
     with tab_head:
         st.markdown("#### 1. Head Area (Front View)")
-        up_head = st.file_uploader("Upload Front/Head View", type=["jpg", "png", "jpeg"], key="up_head")
-        cam_head = st.camera_input("Or snap Front/Head View", key="cam_head")
+        up_head = st.file_uploader("Capture/Upload Front/Head View", type=["jpg", "png", "jpeg"], key="up_head")
         if up_head: st.session_state.photo_head = up_head
-        elif cam_head: st.session_state.photo_head = cam_head
         
         if st.session_state.photo_head:
             st.success("✅ Front/Head view recorded.")
@@ -199,10 +197,8 @@ def main():
             
     with tab_side:
         st.markdown("#### 2. Side View (Left Profile)")
-        up_side = st.file_uploader("Upload Left Side View", type=["jpg", "png", "jpeg"], key="up_side")
-        cam_side = st.camera_input("Or snap Left Side View", key="cam_side")
+        up_side = st.file_uploader("Capture/Upload Left Side View", type=["jpg", "png", "jpeg"], key="up_side")
         if up_side: st.session_state.photo_side = up_side
-        elif cam_side: st.session_state.photo_side = cam_side
         
         if st.session_state.photo_side:
             st.success("✅ Left Side view recorded.")
@@ -210,10 +206,8 @@ def main():
             
     with tab_back:
         st.markdown("#### 3. Back Area (Rear View)")
-        up_back = st.file_uploader("Upload Rear/Back View", type=["jpg", "png", "jpeg"], key="up_back")
-        cam_back = st.camera_input("Or snap Rear/Back View", key="cam_back")
+        up_back = st.file_uploader("Capture/Upload Rear/Back View", type=["jpg", "png", "jpeg"], key="up_back")
         if up_back: st.session_state.photo_back = up_back
-        elif cam_back: st.session_state.photo_back = cam_back
         
         if st.session_state.photo_back:
             st.success("✅ Rear/Back view recorded.")
@@ -221,20 +215,28 @@ def main():
             
     with tab_other_side:
         st.markdown("#### 4. Other Side View (Right Profile)")
-        up_other = st.file_uploader("Upload Right Side View", type=["jpg", "png", "jpeg"], key="up_other")
-        cam_other = st.camera_input("Or snap Right Side View", key="cam_other")
+        up_other = st.file_uploader("Capture/Upload Right Side View", type=["jpg", "png", "jpeg"], key="up_other")
         if up_other: st.session_state.photo_other_side = up_other
-        elif cam_other: st.session_state.photo_other_side = cam_other
         
         if st.session_state.photo_other_side:
             st.success("✅ Right Side view recorded.")
             st.image(st.session_state.photo_other_side, width=280)
 
-    # 5. Prediction execution block
-    results = []
+    # 5. Check if all 4 photos have been provided
+    all_uploaded = (
+        st.session_state.photo_head is not None and
+        st.session_state.photo_side is not None and
+        st.session_state.photo_back is not None and
+        st.session_state.photo_other_side is not None
+    )
     
-    # Process Left Side profile
-    if st.session_state.photo_side:
+    if all_uploaded:
+        st.success("🎉 All 4 views captured! AI is running the weight estimation...")
+        
+        # Run prediction execution block
+        results = []
+        
+        # Process Left Side profile
         st.session_state.photo_side.seek(0)
         res_left = process_side_image(st.session_state.photo_side, "Left Side", segmenter, model)
         if res_left:
@@ -242,8 +244,7 @@ def main():
         else:
             st.warning("⚠️ Could not detect/segment cattle in the Left Side photo. Please ensure it has a clear side profile.")
             
-    # Process Right Side profile
-    if st.session_state.photo_other_side:
+        # Process Right Side profile
         st.session_state.photo_other_side.seek(0)
         res_right = process_side_image(st.session_state.photo_other_side, "Right Side", segmenter, model)
         if res_right:
@@ -251,41 +252,57 @@ def main():
         else:
             st.warning("⚠️ Could not detect/segment cattle in the Right Side photo. Please ensure it has a clear side profile.")
 
-    # Show estimation result if at least one side profile is available
-    if len(results) > 0:
-        st.markdown("---")
-        # Average predicted weight from available side views
-        avg_weight = sum([res[0]['weight'] for res in results]) / len(results)
-        
-        # Display Weight Result Card
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-lbl">Averaged Estimated Cattle Body Weight</div>
-            <div class="metric-val">{avg_weight:.1f} kg</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Display analysis metrics and overlays for each processed side
-        for res_dict, side_label in results:
-            st.markdown(f"### 📊 Analysis for {side_label} (Weight: {res_dict['weight']:.1f} kg)")
+        # Show estimation result if at least one side profile is available
+        if len(results) > 0:
+            st.markdown("---")
+            # Average predicted weight from available side views
+            avg_weight = sum([res[0]['weight'] for res in results]) / len(results)
             
-            # Display Images Columns
-            col1, col2 = st.columns(2)
-            with col1:
-                st.image(res_dict['original'], caption=f"{side_label} - Original", use_container_width=True)
-            with col2:
-                st.image(res_dict['visualizer'], caption=f"{side_label} - AI Segmentation Overlay", use_container_width=True)
+            # Display Weight Result Card
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-lbl">Averaged Estimated Cattle Body Weight</div>
+                <div class="metric-val">{avg_weight:.1f} kg</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Display analysis metrics and overlays for each processed side
+            for res_dict, side_label in results:
+                st.markdown(f"### 📊 Analysis for {side_label} (Weight: {res_dict['weight']:.1f} kg)")
                 
-            # Display Morphometric Features Card
-            length_cm = res_dict['feats']['length'] * 0.4
-            girth_cm = res_dict['feats']['girth'] * 0.7
-            height_cm = res_dict['feats']['height'] * 0.5
-            
-            m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-            m_col1.metric("Body Length (Estimated)", f"{length_cm:.1f} cm", f"{res_dict['feats']['length']:.0f} px")
-            m_col2.metric("Body Height (Estimated)", f"{height_cm:.1f} cm", f"{res_dict['feats']['height']:.0f} px")
-            m_col3.metric("Torso Girth (Estimated)", f"{girth_cm:.1f} cm", f"{res_dict['feats']['girth']:.0f} px")
-            m_col4.metric("Silhouette Area", f"{res_dict['feats']['area'] / 1000:.1f}k px²", None)
+                # Display Images Columns
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.image(res_dict['original'], caption=f"{side_label} - Original", use_container_width=True)
+                with col2:
+                    st.image(res_dict['visualizer'], caption=f"{side_label} - AI Segmentation Overlay", use_container_width=True)
+                    
+                # Display Morphometric Features Card
+                length_cm = res_dict['feats']['length'] * 0.4
+                girth_cm = res_dict['feats']['girth'] * 0.7
+                height_cm = res_dict['feats']['height'] * 0.5
+                
+                m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+                m_col1.metric("Body Length (Estimated)", f"{length_cm:.1f} cm", f"{res_dict['feats']['length']:.0f} px")
+                m_col2.metric("Body Height (Estimated)", f"{height_cm:.1f} cm", f"{res_dict['feats']['height']:.0f} px")
+                m_col3.metric("Torso Girth (Estimated)", f"{girth_cm:.1f} cm", f"{res_dict['feats']['girth']:.0f} px")
+                m_col4.metric("Silhouette Area", f"{res_dict['feats']['area'] / 1000:.1f}k px²", None)
+    else:
+        st.info("💡 **Acquisition Progress:** Please capture or upload all 4 required views to enable weight estimation.")
+        
+        # Display completion checklist
+        chk_head = "✅ Recorded" if st.session_state.photo_head else "❌ Missing"
+        chk_side = "✅ Recorded" if st.session_state.photo_side else "❌ Missing"
+        chk_back = "✅ Recorded" if st.session_state.photo_back else "❌ Missing"
+        chk_other = "✅ Recorded" if st.session_state.photo_other_side else "❌ Missing"
+        
+        st.markdown(f"""
+        **Cattle Capture Checklist:**
+        * 👤 **Front View (Head Area)**: {chk_head}
+        * 🐄 **Left Side View**: {chk_side}
+        * 🍑 **Rear View (Back Area)**: {chk_back}
+        * 🐄 **Right Side View**: {chk_other}
+        """)
 
     # 6. Display 4-View Capture Gallery
     st.markdown("---")
