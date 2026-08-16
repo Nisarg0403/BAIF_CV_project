@@ -122,13 +122,43 @@ def process_side_image(input_file, side_name, segmenter, model):
             
         original_img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         
-        # Segment
-        mask = segmenter.segment(img)
-        if np.sum(mask) == 0:
+        # 1. Downscale image for segmentation to save RAM and prevent OOM crashes on Streamlit Cloud
+        h, w, _ = img.shape
+        max_dim = 800
+        if max(h, w) > max_dim:
+            scale = max_dim / max(h, w)
+            small_img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+        else:
+            scale = 1.0
+            small_img = img.copy()
+            
+        # Segment on the downscaled image
+        small_mask = segmenter.segment(small_img)
+        if np.sum(small_mask) == 0:
             return None
             
-        # Extract features
-        feats = extract_morphometric_features(mask)
+        # Resize mask back to original dimensions
+        mask = cv2.resize(small_mask, (w, h), interpolation=cv2.INTER_NEAREST)
+        
+        # 2. Extract bounding box of the cow mask
+        y_indices, x_indices = np.nonzero(mask)
+        if len(y_indices) == 0:
+            return None
+        xmin, xmax = np.min(x_indices), np.max(x_indices)
+        ymin, ymax = np.min(y_indices), np.max(y_indices)
+        
+        # Crop mask to isolate the cow body
+        cropped_mask = mask[ymin:ymax+1, xmin:xmax+1]
+        
+        # 3. Standardize cropped mask height to 225px to match the training/calibration scale
+        crop_h, crop_w = cropped_mask.shape
+        std_h = 225
+        scale_factor = std_h / crop_h if crop_h > 0 else 1.0
+        std_w = int(crop_w * scale_factor)
+        std_mask = cv2.resize(cropped_mask, (std_w, std_h), interpolation=cv2.INTER_NEAREST)
+        
+        # Extract features from the standardized mask height
+        feats = extract_morphometric_features(std_mask)
         
         # Predict Weight
         X_input = np.array([[feats['length'], feats['height'], feats['area'], feats['girth']]])
@@ -140,9 +170,6 @@ def process_side_image(input_file, side_name, segmenter, model):
         cv2.addWeighted(overlay, 0.35, img, 0.65, 0, img)
         
         # Draw bbox
-        y_indices, x_indices = np.nonzero(mask)
-        xmin, xmax = np.min(x_indices), np.max(x_indices)
-        ymin, ymax = np.min(y_indices), np.max(y_indices)
         cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (0, 0, 255), 2)
         visualizer_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         
