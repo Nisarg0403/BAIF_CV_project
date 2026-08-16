@@ -6,10 +6,18 @@ import cv2
 import pickle
 import numpy as np
 import streamlit as st
+import streamlit.components.v1 as components
 from PIL import Image
+from io import BytesIO
+import base64
 
 from src.segmentation.segment import CowSegmenter
 from src.features.morphometry import extract_morphometric_features
+
+# Declare the custom camera component
+parent_dir = os.path.dirname(os.path.abspath(__file__))
+camera_dir = os.path.join(parent_dir, "camera_component")
+custom_camera = components.declare_component("custom_camera", path=camera_dir)
 
 # Set page config for a premium wide-layout dashboard
 st.set_page_config(
@@ -129,31 +137,13 @@ def main():
             input_file = uploaded_file
             
     with tab2:
-        st.info("💡 **Camera Capture Protocol Checklist:**\n"
-                "* **Perpendicular View**: Stand perpendicular to the side of the cow.\n"
-                "* **Standardized Distance**: Position yourself at the standard distance (e.g. 2.5m).\n"
-                "* **Full Body Visible**: Head, legs, and tail must all be inside the camera frame.\n"
-                "* **Standing Posture**: Cow must be standing naturally, not sitting or bending.")
-        
-        # HTML/CSS Visual Alignment Legend
-        st.markdown("""
-        <div style="border: 2px dashed #3B82F6; border-radius: 8px; padding: 12px; background-color: #EFF6FF; margin-bottom: 15px; font-family: 'Inter', sans-serif;">
-            <h4 style="color: #1D4ED8; margin-top: 0; margin-bottom: 5px; font-size: 1rem; font-weight: 700;">📸 Live Camera Alignment Guide</h4>
-            <p style="font-size: 0.85rem; color: #1E3A8A; margin-bottom: 10px;">Position the cow inside the camera preview to line up with these zones:</p>
-            <div style="display: flex; justify-content: space-between; text-align: center; font-weight: 800; font-family: monospace; font-size: 0.95rem; color: #1E3A8A; background-color: #DBEAFE; padding: 10px; border-radius: 6px; border: 1px solid #BFDBFE;">
-                <div style="flex: 1; border-right: 1px solid #93C5FD;">[ ZONE 1: HEAD ]</div>
-                <div style="flex: 1.5; border-right: 1px solid #93C5FD; color: #047857; background-color: #D1FAE5; margin: 0 4px; border-radius: 3px;">[ ZONE 2: TORSO/GIRTH ]</div>
-                <div style="flex: 1;">[ ZONE 3: RUMP ]</div>
-            </div>
-            <p style="font-size: 0.8rem; color: #4B5563; margin-top: 8px; margin-bottom: 0; text-align: center; font-weight: 500;">
-                ↔ <i>Adjust distance so the complete cow spans exactly across Zone 1 to Zone 3</i> ↔
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        camera_file = st.camera_input("Snap a picture of the cow...")
-        if camera_file is not None:
-            input_file = camera_file
+        # Renders the custom camera component iframe (with live video feed and cow outline overlay)
+        camera_data = custom_camera()
+        if camera_data:
+            # Decode base64 image data sent from the custom component
+            header, encoded = camera_data.split(",", 1)
+            image_data = base64.b64decode(encoded)
+            input_file = BytesIO(image_data)
             
     if input_file is not None:
         # Load and decode image

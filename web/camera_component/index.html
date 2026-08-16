@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0f172a;
+            font-family: 'Inter', -apple-system, sans-serif;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow: hidden;
+        }
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            aspect-ratio: 4/3;
+            background-color: #000000;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid #3b82f6;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        /* Custom Cow Silhouette Overlay */
+        .overlay-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Let clicks pass through to video */
+        }
+        .guideline-box {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(30, 41, 59, 0.85);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #60a5fa;
+            border: 1px solid rgba(96, 165, 250, 0.3);
+            display: flex;
+            gap: 15px;
+        }
+        .control-panel {
+            margin-top: 15px;
+            width: 100%;
+            max-width: 640px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            padding-bottom: 10px;
+        }
+        .btn {
+            background-color: #3b82f6;
+            color: #ffffff;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.4);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn:hover {
+            background-color: #2563eb;
+        }
+        .btn:active {
+            transform: scale(0.98);
+        }
+        .btn-secondary {
+            background-color: #475569;
+            box-shadow: 0 4px 6px -1px rgba(71, 85, 105, 0.4);
+        }
+        .btn-secondary:hover {
+            background-color: #334155;
+        }
+        /* Loading Spinner */
+        .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="camera-container">
+        <!-- Live Video Stream -->
+        <video id="video" autoplay playsinline></video>
+        
+        <!-- Cow Silhouette Guide Overlay (SVG) -->
+        <svg class="overlay-svg" viewBox="0 0 640 480" xmlns="http://www.w3.org/2000/svg">
+            <!-- Dotted outline of a cow side view -->
+            <!-- We draw a stylized vector of a cow to guide user alignment -->
+            <path d="M 120 220 
+                     C 100 210, 80 180, 70 190 
+                     C 60 200, 70 230, 80 240 
+                     C 90 250, 110 240, 120 250 
+                     C 130 260, 140 280, 150 280 
+                     C 160 280, 170 200, 190 190 
+                     C 210 180, 280 170, 350 170 
+                     C 420 170, 460 180, 480 200 
+                     C 500 220, 520 230, 520 250 
+                     C 520 270, 510 280, 520 300 
+                     C 525 310, 530 310, 525 330
+                     C 520 350, 490 350, 480 340
+                     C 470 330, 470 280, 460 270
+                     C 450 260, 390 265, 360 270
+                     L 360 380 
+                     C 360 395, 345 395, 340 380
+                     L 340 280
+                     C 300 280, 250 280, 220 280
+                     L 220 380
+                     C 220 395, 205 395, 200 380
+                     L 200 270
+                     C 170 260, 140 245, 120 220 Z" 
+                  fill="none" 
+                  stroke="#10b981" 
+                  stroke-width="3" 
+                  stroke-dasharray="8,6" 
+                  opacity="0.75" />
+            
+            <!-- Alignment marker zones -->
+            <rect x="70" y="160" width="100" height="150" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.5" />
+            <text x="120" y="150" font-size="11" fill="#ef4444" font-weight="bold" text-anchor="middle" opacity="0.7">ZONE 1: HEAD</text>
+            
+            <rect x="200" y="140" width="220" height="260" fill="none" stroke="#10b981" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.5" />
+            <text x="310" y="130" font-size="11" fill="#10b981" font-weight="bold" text-anchor="middle" opacity="0.7">ZONE 2: TORSO/GIRTH</text>
+            
+            <rect x="440" y="160" width="100" height="200" fill="none" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.5" />
+            <text x="490" y="150" font-size="11" fill="#3b82f6" font-weight="bold" text-anchor="middle" opacity="0.7">ZONE 3: RUMP</text>
+            
+            <!-- Center target crosshair -->
+            <circle cx="310" cy="240" r="10" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.4" />
+            <line x1="290" y1="240" x2="330" y2="240" stroke="#ffffff" stroke-width="1" opacity="0.4" />
+            <line x1="310" y1="220" x2="310" y2="260" stroke="#ffffff" stroke-width="1" opacity="0.4" />
+        </svg>
+        
+        <!-- Live status guide overlay -->
+        <div class="guideline-box">
+            <span>📏 Distance: 2.5m</span>
+            <span>📐 Angle: Perpendicular Side-View</span>
+        </div>
+    </div>
+    
+    <div class="control-panel">
+        <button class="btn btn-secondary" id="toggle-camera-btn">🔄 Flip Camera</button>
+        <button class="btn" id="capture-btn">
+            <div class="spinner" id="btn-spinner"></div>
+            📸 Capture Photo
+        </button>
+    </div>
+
+    <!-- Hidden canvas for capturing frames -->
+    <canvas id="canvas" width="640" height="480" style="display: none;"></canvas>
+
+    <!-- Streamlit SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/streamlit-component-lib@1.4.0/dist/streamlit-component-lib.js"></script>
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const captureBtn = document.getElementById('capture-btn');
+        const toggleCameraBtn = document.getElementById('toggle-camera-btn');
+        const spinner = document.getElementById('btn-spinner');
+        
+        let currentStream = null;
+        let useFrontCamera = false; // Default to rear camera on mobile
+        
+        // Setup Streamlit sizing
+        Streamlit.setFrameHeight(530);
+
+        function stopMediaTracks() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+        }
+
+        async function startCamera() {
+            stopMediaTracks();
+            
+            // facingMode 'environment' is the rear camera, 'user' is front selfie camera
+            const constraints = {
+                video: {
+                    facingMode: useFrontCamera ? "user" : "environment",
+                    width: { ideal: 640 },
+                    height: { ideal: 480 }
+                },
+                audio: false
+            };
+            
+            try {
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = currentStream;
+            } catch (err) {
+                console.error("Error accessing camera: ", err);
+                alert("Camera access denied or unavailable. Please grant permissions and ensure HTTPS is used.");
+            }
+        }
+
+        // Toggle front/back camera
+        toggleCameraBtn.addEventListener('click', () => {
+            useFrontCamera = !useFrontCamera;
+            startCamera();
+        });
+
+        // Capture photo and send base64 data URL to Streamlit
+        captureBtn.addEventListener('click', () => {
+            spinner.style.display = 'block';
+            captureBtn.disabled = true;
+            
+            const context = canvas.getContext('2d');
+            // Draw current video frame to hidden canvas
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Get base64 string
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+            
+            // Send back to Streamlit
+            Streamlit.setComponentValue(dataUrl);
+            
+            // Brief visual feedback timeout
+            setTimeout(() => {
+                spinner.style.display = 'none';
+                captureBtn.disabled = false;
+            }, 1000);
+        });
+
+        // Initial launch
+        startCamera();
+    </script>
+</body>
+</html>
