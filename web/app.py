@@ -79,45 +79,77 @@ def load_regressor():
     with open(model_path, 'rb') as f:
         return pickle.load(f)
 
+def load_image_for_display(uploaded_file):
+    """
+    Safely loads an uploaded file into a PIL Image for displaying, without breaking stream state.
+    """
+    if uploaded_file is None:
+        return None
+    try:
+        if hasattr(uploaded_file, "getvalue"):
+            bytes_data = uploaded_file.getvalue()
+        else:
+            uploaded_file.seek(0)
+            bytes_data = uploaded_file.read()
+        import io
+        return Image.open(io.BytesIO(bytes_data))
+    except Exception as e:
+        print(f"Error loading image for display: {e}")
+        return None
+
 def process_side_image(input_file, side_name, segmenter, model):
     """
     Processes a side profile image: segments, extracts morphometrics, and runs regression.
     """
-    # Load and decode image
-    file_bytes = np.asarray(bytearray(input_file.read()), dtype=np.uint8)
-    img = cv2.imdecode(file_bytes, 1)
-    original_img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    
-    # Segment
-    mask = segmenter.segment(img)
-    if np.sum(mask) == 0:
-        return None
+    try:
+        # Load and decode image bytes safely
+        if hasattr(input_file, "getvalue"):
+            bytes_data = input_file.getvalue()
+        else:
+            input_file.seek(0)
+            bytes_data = input_file.read()
+            
+        file_bytes = np.asarray(bytearray(bytes_data), dtype=np.uint8)
+        img = cv2.imdecode(file_bytes, 1)
+        if img is None:
+            print(f"Error: Could not decode image for {side_name}")
+            return None
+            
+        original_img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         
-    # Extract features
-    feats = extract_morphometric_features(mask)
-    
-    # Predict Weight
-    X_input = np.array([[feats['length'], feats['height'], feats['area'], feats['girth']]])
-    predicted_weight = float(model.predict(X_input)[0])
-    
-    # Draw visualization overlay (Green mask + red bbox)
-    overlay = img.copy()
-    overlay[mask == 255] = [0, 255, 0]  # Green cow silhouette
-    cv2.addWeighted(overlay, 0.35, img, 0.65, 0, img)
-    
-    # Draw bbox
-    y_indices, x_indices = np.nonzero(mask)
-    xmin, xmax = np.min(x_indices), np.max(x_indices)
-    ymin, ymax = np.min(y_indices), np.max(y_indices)
-    cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (0, 0, 255), 2)
-    visualizer_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    
-    return {
-        'weight': predicted_weight,
-        'feats': feats,
-        'original': original_img_rgb,
-        'visualizer': visualizer_rgb
-    }
+        # Segment
+        mask = segmenter.segment(img)
+        if np.sum(mask) == 0:
+            return None
+            
+        # Extract features
+        feats = extract_morphometric_features(mask)
+        
+        # Predict Weight
+        X_input = np.array([[feats['length'], feats['height'], feats['area'], feats['girth']]])
+        predicted_weight = float(model.predict(X_input)[0])
+        
+        # Draw visualization overlay (Green mask + red bbox)
+        overlay = img.copy()
+        overlay[mask == 255] = [0, 255, 0]  # Green cow silhouette
+        cv2.addWeighted(overlay, 0.35, img, 0.65, 0, img)
+        
+        # Draw bbox
+        y_indices, x_indices = np.nonzero(mask)
+        xmin, xmax = np.min(x_indices), np.max(x_indices)
+        ymin, ymax = np.min(y_indices), np.max(y_indices)
+        cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (0, 0, 255), 2)
+        visualizer_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        
+        return {
+            'weight': predicted_weight,
+            'feats': feats,
+            'original': original_img_rgb,
+            'visualizer': visualizer_rgb
+        }
+    except Exception as e:
+        print(f"Error processing side image {side_name}: {e}")
+        return None
 
 def main():
     # 1. Sidebar Design
@@ -193,7 +225,9 @@ def main():
         
         if st.session_state.photo_head:
             st.success("✅ Front/Head view recorded.")
-            st.image(st.session_state.photo_head, width=280)
+            img_h = load_image_for_display(st.session_state.photo_head)
+            if img_h:
+                st.image(img_h, width=280)
             
     with tab_side:
         st.markdown("#### 2. Side View (Left Profile)")
@@ -202,7 +236,9 @@ def main():
         
         if st.session_state.photo_side:
             st.success("✅ Left Side view recorded.")
-            st.image(st.session_state.photo_side, width=280)
+            img_s = load_image_for_display(st.session_state.photo_side)
+            if img_s:
+                st.image(img_s, width=280)
             
     with tab_back:
         st.markdown("#### 3. Back Area (Rear View)")
@@ -211,7 +247,9 @@ def main():
         
         if st.session_state.photo_back:
             st.success("✅ Rear/Back view recorded.")
-            st.image(st.session_state.photo_back, width=280)
+            img_b = load_image_for_display(st.session_state.photo_back)
+            if img_b:
+                st.image(img_b, width=280)
             
     with tab_other_side:
         st.markdown("#### 4. Other Side View (Right Profile)")
@@ -220,7 +258,9 @@ def main():
         
         if st.session_state.photo_other_side:
             st.success("✅ Right Side view recorded.")
-            st.image(st.session_state.photo_other_side, width=280)
+            img_os = load_image_for_display(st.session_state.photo_other_side)
+            if img_os:
+                st.image(img_os, width=280)
 
     # 5. Check if all 4 photos have been provided
     all_uploaded = (
@@ -237,7 +277,6 @@ def main():
         results = []
         
         # Process Left Side profile
-        st.session_state.photo_side.seek(0)
         res_left = process_side_image(st.session_state.photo_side, "Left Side", segmenter, model)
         if res_left:
             results.append((res_left, "Left Side View"))
@@ -245,7 +284,6 @@ def main():
             st.warning("⚠️ Could not detect/segment cattle in the Left Side photo. Please ensure it has a clear side profile.")
             
         # Process Right Side profile
-        st.session_state.photo_other_side.seek(0)
         res_right = process_side_image(st.session_state.photo_other_side, "Right Side", segmenter, model)
         if res_right:
             results.append((res_right, "Right Side View"))
@@ -311,29 +349,33 @@ def main():
     
     with g_col1:
         st.write("**1. Head Area (Front)**")
-        if st.session_state.photo_head:
-            st.image(st.session_state.photo_head, use_container_width=True)
+        img_head = load_image_for_display(st.session_state.photo_head)
+        if img_head:
+            st.image(img_head, use_container_width=True)
         else:
             st.write("❌ *Not Captured/Uploaded*")
             
     with g_col2:
         st.write("**2. Left Side View**")
-        if st.session_state.photo_side:
-            st.image(st.session_state.photo_side, use_container_width=True)
+        img_side = load_image_for_display(st.session_state.photo_side)
+        if img_side:
+            st.image(img_side, use_container_width=True)
         else:
             st.write("❌ *Not Captured/Uploaded*")
             
     with g_col3:
         st.write("**3. Back Area (Rear)**")
-        if st.session_state.photo_back:
-            st.image(st.session_state.photo_back, use_container_width=True)
+        img_back = load_image_for_display(st.session_state.photo_back)
+        if img_back:
+            st.image(img_back, use_container_width=True)
         else:
             st.write("❌ *Not Captured/Uploaded*")
             
     with g_col4:
         st.write("**4. Right Side View**")
-        if st.session_state.photo_other_side:
-            st.image(st.session_state.photo_other_side, use_container_width=True)
+        img_other = load_image_for_display(st.session_state.photo_other_side)
+        if img_other:
+            st.image(img_other, use_container_width=True)
         else:
             st.write("❌ *Not Captured/Uploaded*")
 
