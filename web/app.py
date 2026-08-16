@@ -69,7 +69,7 @@ def load_segmenter():
 
 @st.cache_resource
 def load_regressor():
-    model_path = r"c:\Users\NISARG\BAIF\models\best_weight_regressor.pkl"
+    model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models", "best_weight_regressor.pkl"))
     if not os.path.exists(model_path):
         return None
     with open(model_path, 'rb') as f:
