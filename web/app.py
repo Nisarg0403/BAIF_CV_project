@@ -63,27 +63,6 @@ st.markdown("""
         letter-spacing: 0.05em;
     }
     
-    /* Native Camera Cow Silhouette Overlay */
-    div[data-testid="stCameraInput"] {
-        position: relative !important;
-        border: 2px dashed #3b82f6 !important;
-        border-radius: 12px !important;
-        overflow: hidden !important;
-    }
-    div[data-testid="stCameraInput"]::after {
-        content: "" !important;
-        position: absolute !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 100% !important;
-        height: 100% !important;
-        pointer-events: none !important;
-        background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 640 480' xmlns='http://www.w3.org/2000/svg'><path d='M120 220 C100 210, 80 180, 70 190 C60 200, 70 230, 80 240 C90 250, 110 240, 120 250 C130 260, 140 280, 150 280 C160 280, 170 200, 190 190 C210 180, 280 170, 350 170 C420 170, 460 180, 480 200 C500 220, 520 230, 520 250 C520 270, 510 280, 520 300 C525 310, 530 310, 525 330 C520 350, 490 350, 480 340 C470 330, 470 280, 460 270 C450 260, 390 265, 360 270 L360 380 C360 395, 345 395, 340 380 L340 280 C300 280, 250 280, 220 280 L220 380 C220 395, 205 395, 200 380 L200 270 C170 260, 140 245, 120 220 Z' fill='none' stroke='%2310b981' stroke-width='3' stroke-dasharray='8,6' opacity='0.75' /><rect x='70' y='160' width='100' height='150' fill='none' stroke='%23ef4444' stroke-width='1.5' stroke-dasharray='4,4' opacity='0.5' /><text x='120' y='150' font-size='11' fill='%23ef4444' font-weight='bold' text-anchor='middle' opacity='0.7'>ZONE 1: HEAD</text><rect x='200' y='140' width='220' height='260' fill='none' stroke='%2310b981' stroke-width='1.5' stroke-dasharray='4,4' opacity='0.5' /><text x='310' y='130' font-size='11' fill='%2310b981' font-weight='bold' text-anchor='middle' opacity='0.7'>ZONE 2: TORSO/GIRTH</text><rect x='440' y='160' width='100' height='200' fill='none' stroke='%233b82f6' stroke-width='1.5' stroke-dasharray='4,4' opacity='0.5' /><text x='490' y='150' font-size='11' fill='%233b82f6' font-weight='bold' text-anchor='middle' opacity='0.7'>ZONE 3: RUMP</text><circle cx='310' cy='240' r='10' fill='none' stroke='%23ffffff' stroke-width='1' opacity='0.4' /><line x1='290' y1='240' x2='330' y2='240' stroke='%23ffffff' stroke-width='1' opacity='0.4' /><line x1='310' y1='220' x2='310' y2='260' stroke='%23ffffff' stroke-width='1' opacity='0.4' /></svg>") !important;
-        background-size: contain !important;
-        background-position: center !important;
-        background-repeat: no-repeat !important;
-        z-index: 10 !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -99,6 +78,46 @@ def load_regressor():
         return None
     with open(model_path, 'rb') as f:
         return pickle.load(f)
+
+def process_side_image(input_file, side_name, segmenter, model):
+    """
+    Processes a side profile image: segments, extracts morphometrics, and runs regression.
+    """
+    # Load and decode image
+    file_bytes = np.asarray(bytearray(input_file.read()), dtype=np.uint8)
+    img = cv2.imdecode(file_bytes, 1)
+    original_img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    
+    # Segment
+    mask = segmenter.segment(img)
+    if np.sum(mask) == 0:
+        return None
+        
+    # Extract features
+    feats = extract_morphometric_features(mask)
+    
+    # Predict Weight
+    X_input = np.array([[feats['length'], feats['height'], feats['area'], feats['girth']]])
+    predicted_weight = float(model.predict(X_input)[0])
+    
+    # Draw visualization overlay (Green mask + red bbox)
+    overlay = img.copy()
+    overlay[mask == 255] = [0, 255, 0]  # Green cow silhouette
+    cv2.addWeighted(overlay, 0.35, img, 0.65, 0, img)
+    
+    # Draw bbox
+    y_indices, x_indices = np.nonzero(mask)
+    xmin, xmax = np.min(x_indices), np.max(x_indices)
+    ymin, ymax = np.min(y_indices), np.max(y_indices)
+    cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (0, 0, 255), 2)
+    visualizer_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    
+    return {
+        'weight': predicted_weight,
+        'feats': feats,
+        'original': original_img_rgb,
+        'visualizer': visualizer_rgb
+    }
 
 def main():
     # 1. Sidebar Design
@@ -142,96 +161,164 @@ def main():
     
     if model is None:
         st.error("Error: Trained model weights file not found. Please run `python -m src.models.train` in the workspace first.")
-        return
+        # Initialize session state variables to hold 4 images
+    if 'photo_head' not in st.session_state: st.session_state.photo_head = None
+    if 'photo_side' not in st.session_state: st.session_state.photo_side = None
+    if 'photo_back' not in st.session_state: st.session_state.photo_back = None
+    if 'photo_other_side' not in st.session_state: st.session_state.photo_other_side = None
 
-    # 4. File Uploader & Camera Tabs
-    tab1, tab2 = st.tabs(["📁 Upload Image", "📸 Take Live Photo"])
+    # Reset button in Sidebar
+    if st.sidebar.button("🗑️ Reset All Photos"):
+        st.session_state.photo_head = None
+        st.session_state.photo_side = None
+        st.session_state.photo_back = None
+        st.session_state.photo_other_side = None
+        st.rerun()
+
+    # 4. Multi-View Acquisition Workspace
+    st.markdown("### 📸 Multi-View Cattle Image Acquisition")
+    st.write("Acquire 4 distinct views of the cattle structure. Weight estimation requires at least one side view (Left or Right).")
     
-    input_file = None
-    with tab1:
-        uploaded_file = st.file_uploader("Upload an image of a dairy cow...", type=["jpg", "jpeg", "png"])
-        if uploaded_file is not None:
-            input_file = uploaded_file
-            
-    with tab2:
-        st.info("💡 **Camera Capture Protocol Checklist:**\n"
-                "* **Perpendicular View**: Stand perpendicular to the side of the cow.\n"
-                "* **Standardized Distance**: Position yourself at the standard distance (e.g. 2.5m).\n"
-                "* **Full Body Visible**: Head, legs, and tail must all be inside the camera frame.\n"
-                "* **Standing Posture**: Cow must be standing naturally, not sitting or bending.")
+    tab_head, tab_side, tab_back, tab_other_side = st.tabs([
+        "👤 1. Head Area (Front)",
+        "🐄 2. Side View (Left)",
+        "🍑 3. Back Area (Rear)",
+        "🐄 4. Other Side (Right)"
+    ])
+    
+    with tab_head:
+        st.markdown("#### 1. Head Area (Front View)")
+        up_head = st.file_uploader("Upload Front/Head View", type=["jpg", "png", "jpeg"], key="up_head")
+        cam_head = st.camera_input("Or snap Front/Head View", key="cam_head")
+        if up_head: st.session_state.photo_head = up_head
+        elif cam_head: st.session_state.photo_head = cam_head
         
-        camera_file = st.camera_input("Snap a picture of the cow...")
-        if camera_file is not None:
-            input_file = camera_file
+        if st.session_state.photo_head:
+            st.success("✅ Front/Head view recorded.")
+            st.image(st.session_state.photo_head, width=280)
             
-    if input_file is not None:
-        # Load and decode image
-        file_bytes = np.asarray(bytearray(input_file.read()), dtype=np.uint8)
-        img = cv2.imdecode(file_bytes, 1)
-        original_img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    with tab_side:
+        st.markdown("#### 2. Side View (Left Profile)")
+        up_side = st.file_uploader("Upload Left Side View", type=["jpg", "png", "jpeg"], key="up_side")
+        cam_side = st.camera_input("Or snap Left Side View", key="cam_side")
+        if up_side: st.session_state.photo_side = up_side
+        elif cam_side: st.session_state.photo_side = cam_side
         
-        # Show loading spinner
-        with st.spinner("AI Processing: Segmenting cattle & estimating weight..."):
-            # A. Segment
-            mask = segmenter.segment(img)
+        if st.session_state.photo_side:
+            st.success("✅ Left Side view recorded.")
+            st.image(st.session_state.photo_side, width=280)
             
-            # Check if mask is empty
-            if np.sum(mask) == 0:
-                st.warning("⚠️ Could not detect/segment any cattle in the uploaded image. Please ensure the cow occupies a clear portion of the frame.")
-                return
-                
-            # B. Extract features
-            feats = extract_morphometric_features(mask)
+    with tab_back:
+        st.markdown("#### 3. Back Area (Rear View)")
+        up_back = st.file_uploader("Upload Rear/Back View", type=["jpg", "png", "jpeg"], key="up_back")
+        cam_back = st.camera_input("Or snap Rear/Back View", key="cam_back")
+        if up_back: st.session_state.photo_back = up_back
+        elif cam_back: st.session_state.photo_back = cam_back
+        
+        if st.session_state.photo_back:
+            st.success("✅ Rear/Back view recorded.")
+            st.image(st.session_state.photo_back, width=280)
             
-            # C. Predict Weight
-            X_input = np.array([[feats['length'], feats['height'], feats['area'], feats['girth']]])
-            predicted_weight = float(model.predict(X_input)[0])
-            
-            # D. Calibrate pixels to cm for display
-            length_cm = feats['length'] * 0.4
-            girth_cm = feats['girth'] * 0.7
-            height_cm = feats['height'] * 0.5
-            
-            # E. Draw visualization overlay (Green mask + red bbox)
-            overlay = img.copy()
-            overlay[mask == 255] = [0, 255, 0]  # Green cow silhouette
-            cv2.addWeighted(overlay, 0.35, img, 0.65, 0, img)
-            
-            # Draw bbox
-            y_indices, x_indices = np.nonzero(mask)
-            xmin, xmax = np.min(x_indices), np.max(x_indices)
-            ymin, ymax = np.min(y_indices), np.max(y_indices)
-            cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (0, 0, 255), 2)
-            
-            # Convert visualizer to RGB
-            visualizer_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    with tab_other_side:
+        st.markdown("#### 4. Other Side View (Right Profile)")
+        up_other = st.file_uploader("Upload Right Side View", type=["jpg", "png", "jpeg"], key="up_other")
+        cam_other = st.camera_input("Or snap Right Side View", key="cam_other")
+        if up_other: st.session_state.photo_other_side = up_other
+        elif cam_other: st.session_state.photo_other_side = cam_other
+        
+        if st.session_state.photo_other_side:
+            st.success("✅ Right Side view recorded.")
+            st.image(st.session_state.photo_other_side, width=280)
 
-        # 5. Display Weight Result
+    # 5. Prediction execution block
+    results = []
+    
+    # Process Left Side profile
+    if st.session_state.photo_side:
+        st.session_state.photo_side.seek(0)
+        res_left = process_side_image(st.session_state.photo_side, "Left Side", segmenter, model)
+        if res_left:
+            results.append((res_left, "Left Side View"))
+        else:
+            st.warning("⚠️ Could not detect/segment cattle in the Left Side photo. Please ensure it has a clear side profile.")
+            
+    # Process Right Side profile
+    if st.session_state.photo_other_side:
+        st.session_state.photo_other_side.seek(0)
+        res_right = process_side_image(st.session_state.photo_other_side, "Right Side", segmenter, model)
+        if res_right:
+            results.append((res_right, "Right Side View"))
+        else:
+            st.warning("⚠️ Could not detect/segment cattle in the Right Side photo. Please ensure it has a clear side profile.")
+
+    # Show estimation result if at least one side profile is available
+    if len(results) > 0:
+        st.markdown("---")
+        # Average predicted weight from available side views
+        avg_weight = sum([res[0]['weight'] for res in results]) / len(results)
+        
+        # Display Weight Result Card
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-lbl">Estimated Cattle Body Weight</div>
-            <div class="metric-val">{predicted_weight:.1f} kg</div>
+            <div class="metric-lbl">Averaged Estimated Cattle Body Weight</div>
+            <div class="metric-val">{avg_weight:.1f} kg</div>
         </div>
         """, unsafe_allow_html=True)
         
-        # 6. Display Images Columns
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("📷 Original Image")
-            st.image(original_img_rgb, use_container_width=True)
-        with col2:
-            st.subheader("🤖 AI Segmentation & Detection Overlay")
-            st.image(visualizer_rgb, use_container_width=True)
+        # Display analysis metrics and overlays for each processed side
+        for res_dict, side_label in results:
+            st.markdown(f"### 📊 Analysis for {side_label} (Weight: {res_dict['weight']:.1f} kg)")
             
-        # 7. Display Morphometric Features Card
-        st.markdown("---")
-        st.subheader("📏 Extracted Morphometric Features")
-        
-        m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-        m_col1.metric("Body Length (Estimated)", f"{length_cm:.1f} cm", f"{feats['length']:.0f} px")
-        m_col2.metric("Body Height (Estimated)", f"{height_cm:.1f} cm", f"{feats['height']:.0f} px")
-        m_col3.metric("Torso Girth (Estimated)", f"{girth_cm:.1f} cm", f"{feats['girth']:.0f} px")
-        m_col4.metric("Silhouette Area", f"{feats['area'] / 1000:.1f}k px²", None)
+            # Display Images Columns
+            col1, col2 = st.columns(2)
+            with col1:
+                st.image(res_dict['original'], caption=f"{side_label} - Original", use_container_width=True)
+            with col2:
+                st.image(res_dict['visualizer'], caption=f"{side_label} - AI Segmentation Overlay", use_container_width=True)
+                
+            # Display Morphometric Features Card
+            length_cm = res_dict['feats']['length'] * 0.4
+            girth_cm = res_dict['feats']['girth'] * 0.7
+            height_cm = res_dict['feats']['height'] * 0.5
+            
+            m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+            m_col1.metric("Body Length (Estimated)", f"{length_cm:.1f} cm", f"{res_dict['feats']['length']:.0f} px")
+            m_col2.metric("Body Height (Estimated)", f"{height_cm:.1f} cm", f"{res_dict['feats']['height']:.0f} px")
+            m_col3.metric("Torso Girth (Estimated)", f"{girth_cm:.1f} cm", f"{res_dict['feats']['girth']:.0f} px")
+            m_col4.metric("Silhouette Area", f"{res_dict['feats']['area'] / 1000:.1f}k px²", None)
+
+    # 6. Display 4-View Capture Gallery
+    st.markdown("---")
+    st.subheader("🖼️ 4-View Capture Gallery")
+    g_col1, g_col2, g_col3, g_col4 = st.columns(4)
+    
+    with g_col1:
+        st.write("**1. Head Area (Front)**")
+        if st.session_state.photo_head:
+            st.image(st.session_state.photo_head, use_container_width=True)
+        else:
+            st.write("❌ *Not Captured/Uploaded*")
+            
+    with g_col2:
+        st.write("**2. Left Side View**")
+        if st.session_state.photo_side:
+            st.image(st.session_state.photo_side, use_container_width=True)
+        else:
+            st.write("❌ *Not Captured/Uploaded*")
+            
+    with g_col3:
+        st.write("**3. Back Area (Rear)**")
+        if st.session_state.photo_back:
+            st.image(st.session_state.photo_back, use_container_width=True)
+        else:
+            st.write("❌ *Not Captured/Uploaded*")
+            
+    with g_col4:
+        st.write("**4. Right Side View**")
+        if st.session_state.photo_other_side:
+            st.image(st.session_state.photo_other_side, use_container_width=True)
+        else:
+            st.write("❌ *Not Captured/Uploaded*")
 
 if __name__ == "__main__":
     main()
