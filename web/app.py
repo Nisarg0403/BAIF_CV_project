@@ -62,7 +62,27 @@ st.markdown("""
         text-transform: uppercase;
         letter-spacing: 0.05em;
     }
-    
+    .info-card {
+        background-color: #F8FAFC;
+        border-radius: 12px;
+        padding: 1.5rem;
+        border-left: 6px solid #3B82F6;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        margin-bottom: 1.5rem;
+    }
+    .info-title {
+        font-family: 'Outfit', 'Inter', sans-serif;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1E3A8A;
+        margin-bottom: 0.5rem;
+    }
+    .info-desc {
+        font-family: 'Inter', sans-serif;
+        font-size: 1rem;
+        color: #334155;
+        line-height: 1.6;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -183,6 +203,63 @@ def process_side_image(input_file, side_name, segmenter, model):
         print(f"Error processing side image {side_name}: {e}")
         return None
 
+def show_methodology_page():
+    st.markdown("## 📖 How Cattle Weight is Measured by AI")
+    st.write("This page explains in simple language the scientific process behind the AI weight estimator.")
+    
+    st.markdown("""
+    <div class="info-card">
+        <div class="info-title">📸 Step 1: 4-Angle Photo Capture</div>
+        <div class="info-desc">
+            The estimator requires 4 distinct photos of the cow captured from specific viewpoints:
+            <ul>
+                <li><b>Front View (Head Area)</b>: Used to evaluate head and neck structure.</li>
+                <li><b>Left Side Profile View</b>: The primary anatomical profile used to measure length and height.</li>
+                <li><b>Rear View (Back Area)</b>: Used to evaluate body width and hip spacing.</li>
+                <li><b>Right Side Profile View</b>: The secondary profile, used to balance any position discrepancies.</li>
+            </ul>
+            <i>Note: On mobile, clicking the capture button triggers your phone's native built-in camera app for maximum resolution and sharpness.</i>
+        </div>
+    </div>
+    
+    <div class="info-card">
+        <div class="info-title">🧠 Step 2: AI Silhouette Isolation (Segmentation)</div>
+        <div class="info-desc">
+            When the images are uploaded, the AI uses a deep neural network called <b>DeepLabV3</b>. The model inspects the pixels and separates the cow's body silhouette from the background (like fences, soil, grass, or handlers). It generates a clean, solid 2D mask representing the cow's exact lateral surface area.
+        </div>
+    </div>
+    
+    <div class="info-card">
+        <div class="info-title">📏 Step 3: Morphometric (Body) Measurements</div>
+        <div class="info-desc">
+            Once the cow's body silhouette is isolated, the system calculates 4 critical anatomical measurements:
+            <ul>
+                <li><b>Body Length (L)</b>: The horizontal pixel span from the shoulder point (chest) to the tailhead.</li>
+                <li><b>Body Height (H)</b>: The vertical pixel span from the shoulder/withers down to the ground.</li>
+                <li><b>Torso Girth (G)</b>: The vertical depth of the cow's midsection (barrel depth) at the center of the torso.</li>
+                <li><b>Silhouette Area (A)</b>: The total count of pixels forming the cow's body outline (representing overall body volume).</li>
+            </ul>
+        </div>
+    </div>
+    
+    <div class="info-card">
+        <div class="info-title">⚖️ Step 4: Machine Learning Estimation (XGBoost)</div>
+        <div class="info-desc">
+            These 4 measurements are fed into an <b>XGBoost Machine Learning model</b>. 
+            XGBoost is a regression algorithm trained on a large dataset of actual cattle physical dimensions and their actual scales.
+            The model analyzes the combination of these 4 features to predict the cow's weight in kilograms (kg) instantly.
+            <br><br>
+            <b>Dual-Side Averaging</b>: To prevent errors from the cow standing slightly tilted or under direct sunlight/shadows, the AI performs calculations for both the <b>Left Side Profile</b> and <b>Right Side Profile</b> independently, and then takes the average:
+            <br><br>
+            <div style="text-align: center; font-size: 1.1rem; font-weight: 700; color: #1E3A8A;">
+                Final Weight = (Left Side Weight + Right Side Weight) / 2
+            </div>
+            <br>
+            This dual-profile averaging reduces measurement errors significantly!
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
 def main():
     # 1. Sidebar Design
     st.sidebar.markdown("<br>", unsafe_allow_html=True)
@@ -215,6 +292,10 @@ def main():
     4. Perpendicular camera angle (no extreme tilt).
     """)
 
+    # Page Navigation in Sidebar
+    st.sidebar.markdown("---")
+    page = st.sidebar.radio("🧭 Navigate Pages", ["🔮 Weight Estimator", "📖 How It's Measured"])
+
     # 2. Main Page Header
     st.markdown("<div class='main-title'>BAIF Cattle Weight Estimator</div>", unsafe_allow_html=True)
     st.markdown("<div class='sub-title'>Smartphone-Based Dairy Cattle Weight Estimation using Deep Learning & Morphometric Features</div>", unsafe_allow_html=True)
@@ -227,6 +308,10 @@ def main():
         st.error("Error: Trained model weights file not found. Please run `python -m src.models.train` in the workspace first.")
         return
         
+    if page == "📖 How It's Measured":
+        show_methodology_page()
+        return
+
     # Initialize session state variables to hold 4 images
     if 'photo_head' not in st.session_state: st.session_state.photo_head = None
     if 'photo_side' not in st.session_state: st.session_state.photo_side = None
