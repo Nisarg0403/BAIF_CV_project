@@ -317,11 +317,21 @@ def process_side_image(input_file, side_name, segmenter, model):
         cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (0, 0, 255), 2)
         visualizer_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         
+        # Calculate distance verification ratio (cow height / original image height)
+        height_ratio = float(crop_h / h)
+        warning = None
+        if height_ratio < 0.38:
+            warning = "too_far"
+        elif height_ratio > 0.88:
+            warning = "too_close"
+        
         return {
             'weight': predicted_weight,
             'feats': feats,
             'original': original_img_rgb,
-            'visualizer': visualizer_rgb
+            'visualizer': visualizer_rgb,
+            'height_ratio': height_ratio,
+            'warning': warning
         }
     except Exception as e:
         print(f"Error processing side image {side_name}: {e}")
@@ -598,6 +608,46 @@ def render_prediction_result(segmenter, model):
     else:
         st.warning("⚠️ Right Profile Segmentation Error: Could not locate cattle silhouette. Please upload a clearer lateral profile.")
         
+    # Check for distance warning violations on both sides
+    has_warning = False
+    
+    if res_left:
+        left_ratio = res_left.get('height_ratio', 0.5)
+        left_warn = res_left.get('warning')
+        if left_warn == "too_far":
+            st.error(f"❌ **Left Side View Warning**: The cow is **too far** (occupies only {left_ratio*100:.1f}% of the frame height). Please move closer (approx. 2-3 meters) and recapture.")
+            has_warning = True
+        elif left_warn == "too_close":
+            st.error(f"❌ **Left Side View Warning**: The cow is **too close** (occupies {left_ratio*100:.1f}% of the frame height). Please step back so the entire cow is visible.")
+            has_warning = True
+            
+    if res_right:
+        right_ratio = res_right.get('height_ratio', 0.5)
+        right_warn = res_right.get('warning')
+        if right_warn == "too_far":
+            st.error(f"❌ **Right Side View Warning**: The cow is **too far** (occupies only {right_ratio*100:.1f}% of the frame height). Please move closer (approx. 2-3 meters) and recapture.")
+            has_warning = True
+        elif right_warn == "too_close":
+            st.error(f"❌ **Right Side View Warning**: The cow is **too close** (occupies {right_ratio*100:.1f}% of the frame height). Please step back so the entire cow is visible.")
+            has_warning = True
+
+    if has_warning:
+        st.info("💡 **Acquisition Criteria**: To ensure high-quality calculations, the cow should occupy between **40% and 85%** of the vertical height of your camera's frame. If the cow is too small or too large, the pixel dimensions will not calibrate accurately.")
+        
+        # Option to clear the invalid photos
+        if st.button("🗑️ Clear Invalid Photos & Recapture", use_container_width=True, type="primary"):
+            if res_left and res_left.get('warning'):
+                st.session_state.photo_side = None
+            if res_right and res_right.get('warning'):
+                st.session_state.photo_other_side = None
+            st.session_state.prediction_run = False
+            st.rerun()
+            
+        if st.button("⬅️ Back to Estimator Workspace", use_container_width=True):
+            st.session_state.prediction_run = False
+            st.rerun()
+        return
+
     if len(results) == 0:
         st.error("❌ Critical Error: Silhouette detection failed on both side profiles. Please review the lateral images and try again.")
         if st.button("⬅️ Back to Estimator Workspace", use_container_width=True):
