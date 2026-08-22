@@ -543,23 +543,11 @@ def render_estimator(segmenter, model):
                 st.session_state[f"photo_{view_name}"] = None
                 st.rerun()
         else:
-            mode = st.radio(f"Acquisition mode for {label_title}:", ["📤 File Upload", "📸 Live Camera Capture"], key=f"mode_{view_name}")
-            
-            if mode == "📤 File Upload":
-                file = st.file_uploader(f"Choose image for {label_title} View", type=["jpg", "jpeg", "png"], key=f"file_{view_name}")
-                if file:
-                    st.session_state[f"photo_{view_name}"] = file
-                    st.rerun()
-            else:
-                st.warning("⚠️ Accessing browser camera. Hold camera perpendicular to the cow's side profile.")
-                captured_data = camera_capture_component(key=f"camera_{view_name}")
-                if captured_data:
-                    # Parse base64 URL
-                    header, encoded = captured_data.split(",", 1)
-                    img_bytes = base64.b64decode(encoded)
-                    st.session_state[f"photo_{view_name}"] = BytesIO(img_bytes)
-                    st.success(f"{label_title} captured successfully!")
-                    st.rerun()
+            st.info("📱 **Mobile Camera**: Tap the button below and select **'Camera'** (or take photo) to capture using your phone's native built-in camera software for full focus and resolution.")
+            file = st.file_uploader(f"Capture or Upload {label_title} View", type=["jpg", "jpeg", "png"], key=f"file_{view_name}")
+            if file:
+                st.session_state[f"photo_{view_name}"] = file
+                st.rerun()
                     
     with tab_head:
         st.markdown("#### Front Angle View")
