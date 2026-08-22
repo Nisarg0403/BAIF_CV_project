@@ -61,6 +61,25 @@
             gap: 15px;
         }
 
+        .distance-guide-bar {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            background-color: rgba(245, 158, 11, 0.95); /* Warning Amber */
+            color: #0f172a;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-align: center;
+            pointer-events: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            z-index: 10;
+        }
+
         .control-panel {
             margin-top: 15px;
             width: 100%;
@@ -187,6 +206,11 @@
         <div class="guideline-box">
             <span>📏 Distance: 2.5m</span>
             <span>📐 Angle: Perpendicular Side-View</span>
+        </div>
+
+        <!-- Distance Warning Info Overlay -->
+        <div class="distance-guide-bar">
+            <span>⚠️ If cow is smaller than the dashed boxes, MOVE CLOSER! If it overflows, STEP BACK!</span>
         </div>
     </div>
 
