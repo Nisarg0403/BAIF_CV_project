@@ -207,10 +207,12 @@ build_dir = os.path.join(parent_dir, "camera_component")
 camera_capture_component = components.declare_component("camera_capture_component", path=build_dir)
 
 # Cache resources to keep app fast
-import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+try:
+    from src.segmentation.segment import CowSegmenter, YOLOv8Segmenter
+except ImportError:
+    from src.segmentation.segment import CowSegmenter
+    YOLOv8Segmenter = None
 
-from src.segmentation.segment import CowSegmenter, YOLOv8Segmenter
 from src.features.morphometry import extract_morphometric_features
 
 @st.cache_resource
@@ -219,7 +221,9 @@ def load_deeplab_segmenter():
 
 @st.cache_resource
 def load_yolo_segmenter():
-    return YOLOv8Segmenter()
+    if YOLOv8Segmenter is not None:
+        return YOLOv8Segmenter()
+    return CowSegmenter()
 
 @st.cache_resource
 def load_multimodel_pack():
