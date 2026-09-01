@@ -6,65 +6,43 @@ import cv2
 import numpy as np
 
 class CowSegmenter:
+    """
+    DeepLabV3-ResNet50 Segmentation Engine
+    """
     def __init__(self, device=None):
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         else:
             self.device = device
             
-        print(f"Initializing Cow Segmenter on device: {self.device}")
-        
-        # Load pre-trained DeepLabV3-ResNet50 model
-        # Using the recommended weights parameter
+        print(f"Initializing DeepLabV3 Cow Segmenter on device: {self.device}")
         weights = DeepLabV3_ResNet50_Weights.DEFAULT
         self.model = deeplabv3_resnet50(weights=weights).to(self.device)
         self.model.eval()
         
-        # Define transform for ImageNet preprocessing
         self.transform = T.Compose([
             T.ToTensor(),
             T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
-        
-        # In Pascal VOC (which DeepLabV3 is trained on), index 10 is 'cow'
-        self.cow_class_idx = 10
+        self.cow_class_idx = 10  # Pascal VOC cow class
 
     def segment(self, image):
-        """
-        Segments the cow from the given image (NumPy array).
-        Returns a binary mask (numpy array of 0 and 255) of the same HxW.
-        """
         h, w, _ = image.shape
-        
-        # Convert BGR to RGB
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        
-        # Preprocess and send to device
         input_tensor = self.transform(image_rgb).unsqueeze(0).to(self.device)
         
         with torch.no_grad():
             output = self.model(input_tensor)['out'][0]
             
-        # Get probabilities for VOC classes
-        # Shape: (21, H, W)
         probs = torch.softmax(output, dim=0)
-        
-        # Extract the cow class probability map
         cow_prob = probs[self.cow_class_idx].cpu().numpy()
-        
-        # Threshold to create binary mask (e.g. probability > 0.3 or 0.5)
         binary_mask = (cow_prob > 0.4).astype(np.uint8) * 255
         
-        # Resize mask back to original size if it was resized (DeepLabV3 does not resize output)
         if binary_mask.shape != (h, w):
             binary_mask = cv2.resize(binary_mask, (w, h), interpolation=cv2.INTER_NEAREST)
             
-        # Post-process binary mask to clean noise
         cleaned_mask = self._post_process(binary_mask)
         
-        # Fallback: if segmentation failed or detected area is extremely small
-        # AND this looks like a pre-cropped cow image (aspect ratio >= 1.8 and height < 400),
-        # we fall back to treating the entire image as the cow mask.
         aspect_ratio = w / h if h > 0 else 0
         if np.sum(cleaned_mask == 255) < 0.05 * (h * w):
             if aspect_ratio >= 1.8 and h < 400:
@@ -73,33 +51,69 @@ class CowSegmenter:
         return cleaned_mask
 
     def _post_process(self, mask):
-        """
-        Cleans the binary mask using morphological operations and keeps only the largest contour.
-        """
         if np.sum(mask) == 0:
             return mask
-            
-        # 1. Apply Morphological Closing to fill small holes inside the cow silhouette
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 15))
         closed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-        
-        # 2. Find contours and keep only the largest one (the main cow body)
         contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
             return closed
-            
         largest_contour = max(contours, key=cv2.contourArea)
-        
-        # Create a new blank mask and draw the largest contour
         clean_mask = np.zeros_like(mask)
         cv2.drawContours(clean_mask, [largest_contour], -1, 255, thickness=-1)
-        
-        # 3. Apply Morphological Opening to remove small noise on the boundaries
         clean_mask = cv2.morphologyEx(clean_mask, cv2.MORPH_OPEN, kernel)
-        
         return clean_mask
 
-# Simple test function
+
+class YOLOv8Segmenter:
+    """
+    YOLOv8 Segmentation Engine (Ultralytics)
+    """
+    def __init__(self, model_name='yolov8n-seg.pt'):
+        print(f"Initializing YOLOv8 Segmenter with model: {model_name}")
+        try:
+            from ultralytics import YOLO
+            self.model = YOLO(model_name)
+        except Exception as e:
+            print(f"Error loading YOLOv8: {e}")
+            self.model = None
+
+    def segment(self, image):
+        if self.model is None:
+            return np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
+            
+        h, w, _ = image.shape
+        results = self.model(image, verbose=False)[0]
+        
+        binary_mask = np.zeros((h, w), dtype=np.uint8)
+        
+        if results.masks is not None:
+            # COCO class 19 is 'cow'
+            cow_masks = []
+            for i, cls_idx in enumerate(results.boxes.cls):
+                if int(cls_idx) == 19:  # Cow class in COCO
+                    mask_data = results.masks.data[i].cpu().numpy()
+                    cow_masks.append(mask_data)
+                    
+            if len(cow_masks) > 0:
+                # Combine all cow masks or take the largest one
+                largest_mask = max(cow_masks, key=lambda m: np.sum(m))
+                binary_mask = (largest_mask > 0.5).astype(np.uint8) * 255
+            else:
+                # If no specific cow class detected, take the largest object mask in the image
+                all_masks = [m.cpu().numpy() for m in results.masks.data]
+                if len(all_masks) > 0:
+                    largest_mask = max(all_masks, key=lambda m: np.sum(m))
+                    binary_mask = (largest_mask > 0.5).astype(np.uint8) * 255
+                    
+        if binary_mask.shape != (h, w):
+            binary_mask = cv2.resize(binary_mask, (w, h), interpolation=cv2.INTER_NEAREST)
+            
+        return binary_mask
+
+
 if __name__ == "__main__":
     segmenter = CowSegmenter()
-    print("Segmenter loaded successfully.")
+    print("CowSegmenter (DeepLabV3) ready.")
+    yolo_segmenter = YOLOv8Segmenter()
+    print("YOLOv8Segmenter ready.")
