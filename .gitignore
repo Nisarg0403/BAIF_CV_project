@@ -1,8 +1,13 @@
-# Datasets (Ignore all large local dataset images)
-data/bristol/
-data/processed/
-data/smartphone_pilot/
-data/baif/
+# Datasets & Models (Ignore all local datasets, images, excel files, and model weights)
+data/
+data/*
+models/*.pkl
+models/*.h5
+models/*.pt
+models/*.onnx
+results/
+*.xlsx
+*.csv
 
 # Python Cache
 __pycache__/

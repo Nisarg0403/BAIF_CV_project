@@ -213,13 +213,18 @@ def load_segmenter():
 
 @st.cache_resource
 def load_regressor():
-    model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models", "best_weight_regressor.pkl"))
+    baif_model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models", "baif_best_weight_regressor.pkl"))
+    std_model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models", "best_weight_regressor.pkl"))
+    
+    model_path = baif_model_path if os.path.exists(baif_model_path) else std_model_path
     if not os.path.exists(model_path):
         st.error(f"Model file not found at path: {model_path}")
         return None
     try:
         with open(model_path, 'rb') as f:
-            return pickle.load(f)
+            model = pickle.load(f)
+            model._is_baif_model = os.path.exists(baif_model_path)
+            return model
     except Exception as e:
         st.error(f"Failed to load pickle model: {e}")
         return None
@@ -246,7 +251,7 @@ def load_image_for_display(file_or_path):
         print(f"Error loading image for display: {e}")
         return None
 
-def process_side_image(input_file, side_name, segmenter, model):
+def process_side_image(input_file, side_name, segmenter, model, withers_height_cm=135.0):
     """
     Processes a side profile image: segments, extracts morphometrics, and runs regression.
     """
@@ -293,19 +298,34 @@ def process_side_image(input_file, side_name, segmenter, model):
         
         # Crop mask to isolate the cow body
         cropped_mask = mask[ymin:ymax+1, xmin:xmax+1]
-        
-        # 3. Standardize cropped mask height to 225px to match the training/calibration scale
         crop_h, crop_w = cropped_mask.shape
-        std_h = 225
-        scale_factor = std_h / crop_h if crop_h > 0 else 1.0
-        std_w = int(crop_w * scale_factor)
-        std_mask = cv2.resize(cropped_mask, (std_w, std_h), interpolation=cv2.INTER_NEAREST)
         
-        # Extract features from the standardized mask height
-        feats = extract_morphometric_features(std_mask)
+        # Check model type: BAIF model uses physical scale calibration
+        is_baif = getattr(model, '_is_baif_model', False)
         
-        # Predict Weight
-        X_input = np.array([[feats['length'], feats['height'], feats['area'], feats['girth']]])
+        if is_baif:
+            raw_feats = extract_morphometric_features(mask)
+            scale_cm_per_px = withers_height_cm / raw_feats['height'] if raw_feats['height'] > 0 else 0.5
+            cv_length_cm = raw_feats['length'] * scale_cm_per_px
+            cv_girth_cm = raw_feats['girth'] * scale_cm_per_px
+            cv_area_cm2 = raw_feats['area'] * (scale_cm_per_px ** 2)
+            
+            X_input = np.array([[cv_length_cm, cv_girth_cm, cv_area_cm2, withers_height_cm]])
+            feats = {
+                'length': cv_length_cm,
+                'height': withers_height_cm,
+                'area': cv_area_cm2,
+                'girth': cv_girth_cm
+            }
+        else:
+            # Standardize cropped mask height to 225px to match standard training scale
+            std_h = 225
+            scale_factor = std_h / crop_h if crop_h > 0 else 1.0
+            std_w = int(crop_w * scale_factor)
+            std_mask = cv2.resize(cropped_mask, (std_w, std_h), interpolation=cv2.INTER_NEAREST)
+            feats = extract_morphometric_features(std_mask)
+            X_input = np.array([[feats['length'], feats['height'], feats['area'], feats['girth']]])
+            
         predicted_weight = float(model.predict(X_input)[0])
         
         # Draw visualization overlay (Green mask + red bbox)
@@ -491,13 +511,25 @@ def render_estimator(segmenter, model):
         render_prediction_result(segmenter, model)
         return
         
-    # Cattle ID tag number text input
-    st.session_state.cattle_id = st.text_input(
-        "🏷️ Enter Cattle Tag ID Number", 
-        value=st.session_state.cattle_id, 
-        max_chars=20,
-        help="Specify a unique identification tag for the cow to catalog it in the history log."
-    )
+    # Cattle ID tag number text input & Withers Height Calibration
+    col_id1, col_id2 = st.columns(2)
+    with col_id1:
+        st.session_state.cattle_id = st.text_input(
+            "🏷️ Enter Cattle Tag ID Number", 
+            value=st.session_state.cattle_id, 
+            max_chars=20,
+            help="Specify a unique identification tag for the cow to catalog it in the history log."
+        )
+    with col_id2:
+        withers_val = st.session_state.get('withers_height_cm', 138.0)
+        st.session_state.withers_height_cm = st.number_input(
+            "📏 Physical Height at Withers (cm)",
+            min_value=80.0,
+            max_value=200.0,
+            value=float(withers_val),
+            step=1.0,
+            help="Measured height from withers (shoulder) to ground. Used for exact physical scale calibration (cm/px)."
+        )
     
     # 4-View Upload Stepper
     chk_head = st.session_state.photo_head is not None
@@ -579,18 +611,20 @@ def render_estimator(segmenter, model):
 def render_prediction_result(segmenter, model):
     st.markdown("<div class='section-header'>⚖️ Estimation Report & Results</div>", unsafe_allow_html=True)
     
+    withers_h = float(st.session_state.get('withers_height_cm', 138.0))
+    
     # Perform segmentation and predictions
     results = []
     
     # Process Left Side profile
-    res_left = process_side_image(st.session_state.photo_side, "Left Side", segmenter, model)
+    res_left = process_side_image(st.session_state.photo_side, "Left Side", segmenter, model, withers_height_cm=withers_h)
     if res_left:
         results.append((res_left, "Left Side Profile"))
     else:
         st.warning("⚠️ Left Profile Segmentation Error: Could not locate cattle silhouette. Please upload a clearer lateral profile.")
         
     # Process Right Side profile
-    res_right = process_side_image(st.session_state.photo_other_side, "Right Side", segmenter, model)
+    res_right = process_side_image(st.session_state.photo_other_side, "Right Side", segmenter, model, withers_height_cm=withers_h)
     if res_right:
         results.append((res_right, "Right Side Profile"))
     else:
@@ -651,12 +685,15 @@ def render_prediction_result(segmenter, model):
         pred_id = save_prediction(st.session_state.cattle_id, avg_weight, res_left, res_right)
         st.session_state.saved_prediction_id = pred_id
         
-    # Render premium weight display card
+    # Render premium weight display card with uncertainty range
+    is_baif_model = getattr(model, '_is_baif_model', False)
+    mae_margin = 17.2 if is_baif_model else 18.2
     st.markdown(f"""
     <div class="metric-result-card">
         <div class="metric-result-lbl">Averaged Estimated Cattle Body Weight</div>
         <div class="metric-result-val">{avg_weight:.1f} kg</div>
-        <div class="metric-result-desc">Cattle ID tag: {st.session_state.cattle_id} | Record logged successfully with ID: {st.session_state.saved_prediction_id}</div>
+        <div class="metric-result-desc">Expected Range: <b>{max(100.0, avg_weight - mae_margin):.1f} kg – {avg_weight + mae_margin:.1f} kg</b> (±{mae_margin:.1f} kg MAE)</div>
+        <div class="metric-result-desc" style="margin-top: 0.4rem; font-size: 0.85rem; opacity: 0.9;">Cattle ID Tag: <b>{st.session_state.cattle_id}</b> | Scale Calibration: <b>{withers_h:.0f} cm Withers Height</b> | Log ID: <b>{st.session_state.saved_prediction_id}</b></div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -672,15 +709,20 @@ def render_prediction_result(segmenter, model):
             st.image(res_dict['visualizer'], caption=f"{side_label} - AI Silhouette isolation & bounding box", use_container_width=True)
             
         # Display morphometrics details card
-        length_cm = res_dict['feats']['length'] * 0.4
-        girth_cm = res_dict['feats']['girth'] * 0.7
-        height_cm = res_dict['feats']['height'] * 0.5
+        if is_baif_model:
+            length_cm = res_dict['feats']['length']
+            girth_cm = res_dict['feats']['girth']
+            height_cm = res_dict['feats']['height']
+        else:
+            length_cm = res_dict['feats']['length'] * 0.4
+            girth_cm = res_dict['feats']['girth'] * 0.7
+            height_cm = res_dict['feats']['height'] * 0.5
         
         col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-        col_m1.metric("Body Length (Estimated)", f"{length_cm:.1f} cm", f"{res_dict['feats']['length']:.0f} px")
-        col_m2.metric("Body Height (Estimated)", f"{height_cm:.1f} cm", f"{res_dict['feats']['height']:.0f} px")
-        col_m3.metric("Torso Girth (Estimated)", f"{girth_cm:.1f} cm", f"{res_dict['feats']['girth']:.0f} px")
-        col_m4.metric("Silhouette Area", f"{res_dict['feats']['area']/1000:.1f}k px²", None)
+        col_m1.metric("Body Length (Estimated)", f"{length_cm:.1f} cm")
+        col_m2.metric("Withers Height", f"{height_cm:.1f} cm")
+        col_m3.metric("Torso Girth Surrogate", f"{girth_cm:.1f} cm")
+        col_m4.metric("Silhouette Area", f"{res_dict['feats']['area']:.0f} cm²" if is_baif_model else f"{res_dict['feats']['area']:.0f} px")
         
     st.markdown("---")
     # Quick action button to restart prediction
