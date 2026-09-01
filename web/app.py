@@ -511,25 +511,14 @@ def render_estimator(segmenter, model):
         render_prediction_result(segmenter, model)
         return
         
-    # Cattle ID tag number text input & Withers Height Calibration
-    col_id1, col_id2 = st.columns(2)
-    with col_id1:
-        st.session_state.cattle_id = st.text_input(
-            "🏷️ Enter Cattle Tag ID Number", 
-            value=st.session_state.cattle_id, 
-            max_chars=20,
-            help="Specify a unique identification tag for the cow to catalog it in the history log."
-        )
-    with col_id2:
-        withers_val = st.session_state.get('withers_height_cm', 138.0)
-        st.session_state.withers_height_cm = st.number_input(
-            "📏 Physical Height at Withers (cm)",
-            min_value=80.0,
-            max_value=200.0,
-            value=float(withers_val),
-            step=1.0,
-            help="Measured height from withers (shoulder) to ground. Used for exact physical scale calibration (cm/px)."
-        )
+    # Cattle ID tag number text input (Full width, no manual height entry)
+    st.session_state.cattle_id = st.text_input(
+        "🏷️ Enter Cattle Tag ID Number", 
+        value=st.session_state.cattle_id, 
+        max_chars=20,
+        help="Specify a unique identification tag for the cow to catalog it in the history log."
+    )
+    st.session_state.withers_height_cm = 138.0  # Automatic default reference for distance scale calibration
     
     # 2 Side Profile Upload Stepper (Left Profile & Right Profile)
     chk_side = st.session_state.photo_side is not None
