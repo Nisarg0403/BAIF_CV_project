@@ -59,6 +59,57 @@ def train_baif_multimodel_pack(features_csv, models_dir):
         fitted_weight_models[name] = model
         print(f"Trained weight model: {name}")
         
+    print("\n--- Training Data Predictions vs Actual Ground Truth ---")
+    gb_model = fitted_weight_models['Gradient Boosting Regressor']
+    df['pred_weight_kg'] = gb_model.predict(X_calibrated)
+    
+    for tag in df['animal_tag'].unique():
+        sub = df[df['animal_tag'] == tag]
+        actual = sub['tape_weight_kg'].iloc[0]
+        pred_l = sub[sub['side'] == 'left']['pred_weight_kg'].values[0] if len(sub[sub['side'] == 'left']) > 0 else None
+        pred_r = sub[sub['side'] == 'right']['pred_weight_kg'].values[0] if len(sub[sub['side'] == 'right']) > 0 else None
+        
+        if pred_l is not None and pred_r is not None:
+            pred_avg = (pred_l + pred_r) / 2.0
+        elif pred_l is not None:
+            pred_avg = pred_l
+        else:
+            pred_avg = pred_r
+            
+        print(f"Tag_ID: {tag} | Actual Tape Weight: {actual:.1f} kg | Predicted Weight: {pred_avg:.1f} kg | Diff: {pred_avg - actual:+.1f} kg")
+        
+    # Calculate overall dataset evaluation metrics across all 15 animals
+    from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+    actual_weights = []
+    pred_weights = []
+    
+    for tag in df['animal_tag'].unique():
+        sub = df[df['animal_tag'] == tag]
+        actual = sub['tape_weight_kg'].iloc[0]
+        pred_l = sub[sub['side'] == 'left']['pred_weight_kg'].values[0] if len(sub[sub['side'] == 'left']) > 0 else None
+        pred_r = sub[sub['side'] == 'right']['pred_weight_kg'].values[0] if len(sub[sub['side'] == 'right']) > 0 else None
+        
+        if pred_l is not None and pred_r is not None:
+            pred_avg = (pred_l + pred_r) / 2.0
+        elif pred_l is not None:
+            pred_avg = pred_l
+        else:
+            pred_avg = pred_r
+            
+        actual_weights.append(actual)
+        pred_weights.append(pred_avg)
+        
+    mae = mean_absolute_error(actual_weights, pred_weights)
+    rmse = np.sqrt(mean_squared_error(actual_weights, pred_weights))
+    r2 = r2_score(actual_weights, pred_weights)
+    
+    print("\n==========================================")
+    print("--- OVERALL MODEL EVALUATION METRICS ---")
+    print(f"Mean Absolute Error (MAE)  : {mae:.2f} kg")
+    print(f"Root Mean Sq Error (RMSE)  : {rmse:.2f} kg")
+    print(f"Correlation / R2 Score     : {r2:.4f}")
+    print("==========================================\n")
+        
     # 4. Save Multi-Model Pack
     pack = {
         'measurement_estimator': measurement_estimator,
