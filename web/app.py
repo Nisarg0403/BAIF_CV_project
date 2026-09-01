@@ -531,16 +531,15 @@ def render_estimator(segmenter, model):
             help="Measured height from withers (shoulder) to ground. Used for exact physical scale calibration (cm/px)."
         )
     
-    # 4-View Upload Stepper
-    chk_head = st.session_state.photo_head is not None
+    # 2 Side Profile Upload Stepper (Left Profile & Right Profile)
     chk_side = st.session_state.photo_side is not None
-    chk_back = st.session_state.photo_back is not None
     chk_other = st.session_state.photo_other_side is not None
     
-    all_uploaded = chk_head and chk_side and chk_back and chk_other
+    # Ready to predict if at least one lateral side profile photo is uploaded
+    ready_to_predict = chk_side or chk_other
     
-    st.markdown("### 📸 Image Acquisition Stepper")
-    col_st1, col_st2, col_st3, col_st4 = st.columns(4)
+    st.markdown("### 📸 Side Profile Image Acquisition Stepper")
+    col_st1, col_st2 = st.columns(2)
     
     def get_status_html(is_complete, label):
         status_class = "complete" if is_complete else "missing"
@@ -552,16 +551,12 @@ def render_estimator(segmenter, model):
         </div>
         """
         
-    col_st1.markdown(get_status_html(chk_head, "1. Front / Head"), unsafe_allow_html=True)
-    col_st2.markdown(get_status_html(chk_side, "2. Left Side View"), unsafe_allow_html=True)
-    col_st3.markdown(get_status_html(chk_back, "3. Rear / Back"), unsafe_allow_html=True)
-    col_st4.markdown(get_status_html(chk_other, "4. Right Side View"), unsafe_allow_html=True)
+    col_st1.markdown(get_status_html(chk_side, "1. Left Side Profile"), unsafe_allow_html=True)
+    col_st2.markdown(get_status_html(chk_other, "2. Right Side Profile"), unsafe_allow_html=True)
     
-    tab_head, tab_side, tab_back, tab_other_side = st.tabs([
-        "👤 1. Front (Head)",
-        "🐄 2. Left Profile",
-        "🍑 3. Rear (Back)",
-        "🐄 4. Right Profile"
+    tab_side, tab_other_side = st.tabs([
+        "🐄 1. Left Side Profile",
+        "🐄 2. Right Side Profile"
     ])
     
     def render_tab_content(view_name, label_title):
@@ -570,28 +565,20 @@ def render_estimator(segmenter, model):
         if stored_photo:
             img = load_image_for_display(stored_photo)
             if img:
-                st.image(img, caption=f"Selected {label_title}", width=320)
+                st.image(img, caption=f"Selected {label_title}", width=380)
             if st.button(f"🗑️ Remove Photo", key=f"del_{view_name}"):
                 st.session_state[f"photo_{view_name}"] = None
                 st.rerun()
         else:
-            st.info("📱 **Mobile Camera**: Tap the button below and select **'Camera'** (or take photo) to capture using your phone's native built-in camera software for full focus and resolution.")
+            st.info("📱 **Mobile Camera / Upload**: Tap below to upload or take a photo of the cow's lateral side profile.")
             file = st.file_uploader(f"Capture or Upload {label_title} View", type=["jpg", "jpeg", "png"], key=f"file_{view_name}")
             if file:
                 st.session_state[f"photo_{view_name}"] = file
                 st.rerun()
                     
-    with tab_head:
-        st.markdown("#### Front Angle View")
-        render_tab_content("head", "Front/Head")
-        
     with tab_side:
         st.markdown("#### Left Side Profile View")
         render_tab_content("side", "Left Side Profile")
-        
-    with tab_back:
-        st.markdown("#### Rear Angle View")
-        render_tab_content("back", "Rear/Back")
         
     with tab_other_side:
         st.markdown("#### Right Side Profile View")
@@ -599,13 +586,13 @@ def render_estimator(segmenter, model):
         
     # Actions block at bottom
     st.markdown("---")
-    if all_uploaded:
-        st.success("🎉 All 4 mandatory views captured successfully! The AI estimation is ready.")
+    if ready_to_predict:
+        st.success("🎉 Side profile image captured! The AI estimation is ready.")
         if st.button("🔮 Run AI Weight Estimation", use_container_width=True, type="primary"):
             st.session_state.prediction_run = True
             st.rerun()
     else:
-        st.info("💡 **Acquisition Notice:** Please complete the acquisition checklist above to enable the AI Estimation button.")
+        st.info("💡 **Acquisition Notice:** Please upload at least one side profile photo (Left or Right) above to enable the AI Estimation button.")
         st.button("🔮 Run AI Weight Estimation (Disabled)", disabled=True, use_container_width=True)
 
 def render_prediction_result(segmenter, model):
