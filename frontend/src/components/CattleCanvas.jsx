@@ -123,63 +123,76 @@ export default function CattleCanvas({
 
       // 3. Draw Measurement Vectors & Caliper Lines
       if (showVectors && measurements) {
-        const isRear = viewType === 'rear' || (landmarks && landmarks.B_left && landmarks.B_right);
+        const isRear = viewType === 'rear';
 
-        if (isRear && landmarks && landmarks.B_left && landmarks.B_right) {
+        if (isRear) {
           // Rear View Caliper (Rump Width)
-          const pL = { x: toX(landmarks.B_left.x), y: toY(landmarks.B_left.y) };
-          const pR = { x: toX(landmarks.B_right.x), y: toY(landmarks.B_right.y) };
+          if (landmarks && landmarks.B_left && landmarks.B_right) {
+            const pL = { x: toX(landmarks.B_left.x), y: toY(landmarks.B_left.y) };
+            const pR = { x: toX(landmarks.B_right.x), y: toY(landmarks.B_right.y) };
 
-          ctx.setLineDash([6, 4]);
-          ctx.strokeStyle = '#34D399';
-          ctx.lineWidth = 2.5;
-          ctx.beginPath();
-          ctx.moveTo(pL.x, pL.y);
-          ctx.lineTo(pR.x, pR.y);
-          ctx.stroke();
-          ctx.setLineDash([]);
+            ctx.setLineDash([6, 4]);
+            ctx.strokeStyle = '#34D399';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(pL.x, pL.y);
+            ctx.lineTo(pR.x, pR.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
 
-          if (measurements.chest_girth_cm) {
-            const rumpW = (measurements.chest_girth_cm * 0.26).toFixed(1);
-            drawBadge(`${rumpW} cm`, 'Rump Width', (pL.x + pR.x) / 2, pL.y - 20);
+            if (measurements.chest_girth_cm) {
+              const rumpW = (measurements.chest_girth_cm * 0.26).toFixed(1);
+              drawBadge(`${rumpW} cm`, 'Rump Width', (pL.x + pR.x) / 2, pL.y - 18);
+            }
           }
-        } else if (landmarks && landmarks.D && landmarks.C && landmarks.A && landmarks.E1) {
-          // Side Profile Caliper Lines settled directly on landmark points
-          const pD = { x: toX(landmarks.D.x), y: toY(landmarks.D.y) };   // Shoulder Joint
-          const pC = { x: toX(landmarks.C.x), y: toY(landmarks.C.y) };   // Pin Bone
-          const pA = { x: toX(landmarks.A.x), y: toY(landmarks.A.y) };   // Withers (Shoulder Top)
-          const pE1 = { x: toX(landmarks.E1.x), y: toY(landmarks.E1.y) }; // Front Hoof Base
+        } else if (landmarks) {
+          // Side Profile Caliper Lines (Left or Right Side Profile)
+          const pD = landmarks.D ? { x: toX(landmarks.D.x), y: toY(landmarks.D.y) } : null;
+          const pC = landmarks.C ? { x: toX(landmarks.C.x), y: toY(landmarks.C.y) } : null;
+          const pA = landmarks.A ? { x: toX(landmarks.A.x), y: toY(landmarks.A.y) } : null;
+          const pE1 = landmarks.E1 ? { x: toX(landmarks.E1.x), y: toY(landmarks.E1.y) } : null;
 
           // Body Length Caliper Vector (Point D to Point C)
-          ctx.setLineDash([6, 4]);
-          ctx.strokeStyle = '#38BDF8'; // Sky blue for Body Length
-          ctx.lineWidth = 2.5;
-          ctx.beginPath();
-          ctx.moveTo(pD.x, pD.y);
-          ctx.lineTo(pC.x, pC.y);
-          ctx.stroke();
+          if (pD && pC) {
+            ctx.setLineDash([6, 4]);
+            ctx.strokeStyle = '#38BDF8'; // Sky blue for Body Length
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(pD.x, pD.y);
+            ctx.lineTo(pC.x, pC.y);
+            ctx.stroke();
 
-          // Withers Height / Chest Girth Vector (Point A to Point E1)
-          ctx.strokeStyle = '#34D399'; // Emerald green for Height/Girth
-          ctx.beginPath();
-          ctx.moveTo(pA.x, pA.y);
-          ctx.lineTo(pE1.x, pE1.y);
-          ctx.stroke();
-          ctx.setLineDash([]);
-
-          // Draw Badges at Midpoints
-          if (measurements.body_length_cm) {
-            drawBadge(`${measurements.body_length_cm} cm`, 'Body Length', (pD.x + pC.x) / 2, (pD.y + pC.y) / 2 - 16);
+            if (measurements.body_length_cm) {
+              drawBadge(`${measurements.body_length_cm} cm`, 'Body Length', (pD.x + pC.x) / 2, (pD.y + pC.y) / 2 - 16);
+            }
           }
-          if (measurements.chest_girth_cm) {
-            drawBadge(`${measurements.chest_girth_cm} cm`, 'Chest Girth', pA.x + 15, (pA.y + pE1.y) / 2);
+
+          // Withers Height Vector (Point A to Point E1)
+          if (pA && pE1) {
+            ctx.setLineDash([6, 4]);
+            ctx.strokeStyle = '#34D399'; // Emerald green for Height/Girth
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(pA.x, pA.y);
+            ctx.lineTo(pE1.x, pE1.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            if (measurements.chest_girth_cm) {
+              drawBadge(`${measurements.chest_girth_cm} cm`, 'Chest Girth', pA.x + 20, (pA.y + pE1.y) / 2);
+            }
           }
         }
       }
 
-      // 4. Draw Glowing Landmark Target Dots (A, B, C, D, E1, E2, F, G)
+      // 4. Draw Glowing Landmark Target Dots per viewType
       if (showLandmarks && landmarks) {
+        const allowedPoints = viewType === 'rear'
+          ? ['B_left', 'B_right', 'E1', 'E2']
+          : ['A', 'B', 'C', 'D', 'E1', 'E2', 'F', 'G'];
+
         Object.entries(landmarks).forEach(([name, pt]) => {
+          if (!allowedPoints.includes(name)) return;
           if (!pt || typeof pt.x !== 'number' || typeof pt.y !== 'number') return;
 
           const cx = toX(pt.x);
@@ -207,6 +220,7 @@ export default function CattleCanvas({
           ctx.fillText(name, cx + 11, cy);
         });
       }
+
     };
   }, [imageUrl, landmarks, measurements, contourPoints, viewType, showContour, showLandmarks, showVectors]);
 

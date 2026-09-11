@@ -60,15 +60,17 @@ def detect_anatomical_landmarks(mask, view_type='side'):
         return landmarks
 
     # Side Profile (Left or Right) Landmark Detection
-    # Determine orientation: compare top spine height in left 20% vs right 20%
-    left_top_ys = [np.min(np.where(mask[:, x] == 255)[0]) for x in range(xmin, int(xmin + 0.20 * width_span)) if len(np.where(mask[:, x] == 255)[0]) > 0]
-    right_top_ys = [np.min(np.where(mask[:, x] == 255)[0]) for x in range(int(xmax - 0.20 * width_span), xmax) if len(np.where(mask[:, x] == 255)[0]) > 0]
-
-    left_avg_top = np.mean(left_top_ys) if left_top_ys else ymin
-    right_avg_top = np.mean(right_top_ys) if right_top_ys else ymin
-
-    # Rump top spine is higher (lower Y index) than head/neck top spine
-    facing_right = left_avg_top < right_avg_top
+    # Determine orientation based on view_type hint and spine height
+    if 'right' in view_lower:
+        facing_right = True
+    elif 'left' in view_lower:
+        facing_right = False
+    else:
+        left_top_ys = [np.min(np.where(mask[:, x] == 255)[0]) for x in range(xmin, int(xmin + 0.20 * width_span)) if len(np.where(mask[:, x] == 255)[0]) > 0]
+        right_top_ys = [np.min(np.where(mask[:, x] == 255)[0]) for x in range(int(xmax - 0.20 * width_span), xmax) if len(np.where(mask[:, x] == 255)[0]) > 0]
+        left_avg_top = np.mean(left_top_ys) if left_top_ys else ymin
+        right_avg_top = np.mean(right_top_ys) if right_top_ys else ymin
+        facing_right = left_avg_top < right_avg_top
 
     if facing_right:
         # Head on right, Rump on left

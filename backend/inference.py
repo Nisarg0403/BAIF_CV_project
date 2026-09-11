@@ -85,6 +85,14 @@ def process_image_file(image_bytes, side_name="Left Side Profile", model_engine=
     if np.sum(small_mask) == 0:
         raise ValueError("Segmentation failed: Could not isolate cattle silhouette.")
 
+    # Filter out background noise, people, or stray pixels by keeping ONLY the largest contour
+    contours, _ = cv2.findContours(small_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if contours:
+        largest_contour = max(contours, key=cv2.contourArea)
+        clean_mask = np.zeros_like(small_mask)
+        cv2.drawContours(clean_mask, [largest_contour], -1, 255, thickness=cv2.FILLED)
+        small_mask = clean_mask
+
     mask = cv2.resize(small_mask, (w, h), interpolation=cv2.INTER_NEAREST)
 
     # 2. Bounding Box & Contour
