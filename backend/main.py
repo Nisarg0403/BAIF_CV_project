@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Optional, List
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -197,7 +198,33 @@ def delete_history_entry(entry_id: str):
         json.dump(updated, f, indent=2)
 FRONTEND_DIST = os.path.join(PROJECT_ROOT, "frontend", "dist")
 if os.path.exists(FRONTEND_DIST):
-    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
+    # Mount assets folder if present
+    assets_dir = os.path.join(FRONTEND_DIST, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        # Allow API endpoints to be handled first
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="API endpoint not found")
+        
+        target_file = os.path.join(FRONTEND_DIST, full_path)
+        if full_path and os.path.exists(target_file) and os.path.isfile(target_file):
+            return FileResponse(target_file)
+        
+        index_file = os.path.join(FRONTEND_DIST, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        return {"detail": "Frontend index.html missing"}
+else:
+    @app.get("/")
+    def root_fallback():
+        return {
+            "status": "online",
+            "message": "CattleWeightAI API Backend is running.",
+            "note": "Frontend dist folder not detected."
+        }
 
 if __name__ == "__main__":
     import uvicorn
