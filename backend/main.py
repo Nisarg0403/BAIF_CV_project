@@ -195,7 +195,9 @@ def delete_history_entry(entry_id: str):
     updated = [item for item in history if item["id"] != entry_id]
     with open(HISTORY_FILE, "w") as f:
         json.dump(updated, f, indent=2)
-    return {"success": True, "deleted_id": entry_id}
+FRONTEND_DIST = os.path.join(PROJECT_ROOT, "frontend", "dist")
+if os.path.exists(FRONTEND_DIST):
+    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn

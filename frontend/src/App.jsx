@@ -50,7 +50,9 @@ export default function App() {
   const [predictionsByView, setPredictionsByView] = useState(null);
   const [history, setHistory] = useState([]);
 
-  const API_BASE = `http://${window.location.hostname}:8000`;
+  const API_BASE = window.location.port === '5173' || window.location.port === '3000'
+    ? `http://${window.location.hostname}:8000`
+    : `${window.location.protocol}//${window.location.host}`;
 
   // Fetch prediction history on mount
   useEffect(() => {
