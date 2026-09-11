@@ -19,14 +19,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Create runtime data directories
+# Create runtime directories
 RUN mkdir -p data/processed/uploaded_images
 
-# Copy Python codebase, ML models, and configs
+# Copy Python codebase and models tracked in Git
 COPY backend/ ./backend/
 COPY src/ ./src/
 COPY models/ ./models/
-COPY configs/ ./configs/
 
 # Copy compiled static frontend assets from Stage 1
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
