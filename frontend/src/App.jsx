@@ -104,7 +104,10 @@ export default function App() {
   };
 
   const handleRunPrediction = async (customPhotos = null) => {
-    const targetPhotos = customPhotos || photos;
+    // Filter out React SyntheticEvent objects passed from button onClick handlers
+    const isPhotoObject = customPhotos && (customPhotos.left !== undefined || customPhotos.right !== undefined || customPhotos.rear !== undefined);
+    const targetPhotos = isPhotoObject ? customPhotos : photos;
+    
     const hasPhoto = targetPhotos.left || targetPhotos.right || targetPhotos.rear;
     if (!hasPhoto) {
       setErrorMsg('Please upload or capture at least one profile photo (Left, Right, or Rear view).');
@@ -452,7 +455,7 @@ export default function App() {
                   <div style={{ display: 'flex', gap: '0.75rem' }}>
                     <button 
                       className="btn-primary" 
-                      onClick={handleRunPrediction}
+                      onClick={() => handleRunPrediction()}
                       disabled={loading}
                       style={{ flex: 1 }}
                     >
