@@ -16,22 +16,24 @@ def train_baif_multimodel_pack(features_csv, models_dir):
     df = pd.read_csv(features_csv)
     print(f"Loaded {len(df)} records for multi-model training...")
     
-    # 1. Feature Engineering for Image-to-Measurement Translation
-    # Input features extracted from mask silhouette:
-    # Aspect Ratio, Bounding Box Length, Height, Area, Thickness
-    df['aspect_ratio'] = df['raw_length_px'] / df['raw_height_px']
-    df['normalized_area'] = df['raw_area_px'] / (df['raw_length_px'] * df['raw_height_px'])
+    # 1. Feature Engineering for Image-to-Measurement Translation (Scale Invariant Ratios)
+    if 'height_ratio' not in df.columns:
+        df['height_ratio'] = df['raw_height_px'] / df['img_h']
+        df['length_ratio'] = df['raw_length_px'] / df['img_w']
+        df['aspect_ratio'] = df['raw_length_px'] / df['raw_height_px']
+        df['normalized_area'] = df['raw_area_px'] / (df['raw_length_px'] * df['raw_height_px'])
+        df['girth_ratio'] = df['raw_girth_px'] / df['raw_height_px']
     
-    X_mask_features = df[['raw_length_px', 'raw_height_px', 'raw_area_px', 'aspect_ratio', 'normalized_area']].values
+    feature_cols = ['height_ratio', 'length_ratio', 'aspect_ratio', 'normalized_area', 'girth_ratio']
+    X_mask_features = df[feature_cols].values
     
     # Ground-truth physical dimensions from BAIF dataset
     Y_physical = df[['tape_length_cm', 'tape_withers_height_cm', 'tape_girth_cm']].values
-    # Note: Stature height is roughly Withers Height + 3 cm based on dataset averages
     
     # Target weight
     y_weight = df['tape_weight_kg'].values
     
-    # 2. Train Physical Measurement Estimators (Translates Image Silhouette -> Physical CM)
+    # 2. Train Physical Measurement Estimators (Translates Image Silhouette Ratios -> Physical CM)
     measurement_estimator = MultiOutputRegressor(GradientBoostingRegressor(n_estimators=50, max_depth=3, random_state=42))
     measurement_estimator.fit(X_mask_features, Y_physical)
     
@@ -114,7 +116,7 @@ def train_baif_multimodel_pack(features_csv, models_dir):
     pack = {
         'measurement_estimator': measurement_estimator,
         'weight_models': fitted_weight_models,
-        'feature_names': ['raw_length_px', 'raw_height_px', 'raw_area_px', 'aspect_ratio', 'normalized_area']
+        'feature_names': feature_cols
     }
     
     os.makedirs(models_dir, exist_ok=True)

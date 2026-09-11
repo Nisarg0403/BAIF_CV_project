@@ -60,81 +60,78 @@ def detect_anatomical_landmarks(mask, view_type='side'):
         return landmarks
 
     # Side Profile (Left or Right) Landmark Detection
-    # Determine orientation: facing right or facing left
-    left_quarter_area = np.sum(mask[:, xmin:int(xmin + 0.25 * width_span)] == 255)
-    right_quarter_area = np.sum(mask[:, int(xmax - 0.25 * width_span):xmax] == 255)
-    
-    # Head is typically in the thinner area end
-    facing_right = left_quarter_area > right_quarter_area
-    
-    if facing_right:
-        # Head on right, tail on left
-        head_x_region = (int(xmin + 0.65 * width_span), xmax)
-        shoulder_x_region = (int(xmin + 0.45 * width_span), int(xmin + 0.80 * width_span))
-        withers_x_region = (int(xmin + 0.45 * width_span), int(xmin + 0.75 * width_span))
-        hip_x_region = (int(xmin + 0.15 * width_span), int(xmin + 0.45 * width_span))
-        pin_x_region = (xmin, int(xmin + 0.25 * width_span))
-    else:
-        # Head on left, tail on right
-        head_x_region = (xmin, int(xmin + 0.35 * width_span))
-        shoulder_x_region = (int(xmin + 0.20 * width_span), int(xmin + 0.55 * width_span))
-        withers_x_region = (int(xmin + 0.25 * width_span), int(xmin + 0.55 * width_span))
-        hip_x_region = (int(xmin + 0.55 * width_span), int(xmin + 0.85 * width_span))
-        pin_x_region = (int(xmin + 0.75 * width_span), xmax)
+    # Determine orientation: compare top spine height in left 20% vs right 20%
+    left_top_ys = [np.min(np.where(mask[:, x] == 255)[0]) for x in range(xmin, int(xmin + 0.20 * width_span)) if len(np.where(mask[:, x] == 255)[0]) > 0]
+    right_top_ys = [np.min(np.where(mask[:, x] == 255)[0]) for x in range(int(xmax - 0.20 * width_span), xmax) if len(np.where(mask[:, x] == 255)[0]) > 0]
 
-    # 1. Point A: Withers (highest back point in front half)
-    withers_y = ymax
-    withers_x = int((withers_x_region[0] + withers_x_region[1]) / 2)
+    left_avg_top = np.mean(left_top_ys) if left_top_ys else ymin
+    right_avg_top = np.mean(right_top_ys) if right_top_ys else ymin
+
+    # Rump top spine is higher (lower Y index) than head/neck top spine
+    facing_right = left_avg_top < right_avg_top
+
+    if facing_right:
+        # Head on right, Rump on left
+        withers_x_region = (int(xmin + 0.40 * width_span), int(xmin + 0.65 * width_span))
+        hip_x_region = (int(xmin + 0.15 * width_span), int(xmin + 0.38 * width_span))
+        shoulder_x_region = (int(xmin + 0.60 * width_span), int(xmin + 0.78 * width_span))
+        pin_x_region = (int(xmin + 0.03 * width_span), int(xmin + 0.18 * width_span))
+        head_x_region = (int(xmin + 0.75 * width_span), xmax)
+    else:
+        # Head on left, Rump on right
+        withers_x_region = (int(xmin + 0.35 * width_span), int(xmin + 0.60 * width_span))
+        hip_x_region = (int(xmin + 0.62 * width_span), int(xmin + 0.85 * width_span))
+        shoulder_x_region = (int(xmin + 0.22 * width_span), int(xmin + 0.40 * width_span))
+        pin_x_region = (int(xmin + 0.82 * width_span), int(xmin + 0.97 * width_span))
+        head_x_region = (xmin, int(xmin + 0.25 * width_span))
+
+    # 1. Point A: Withers (top-most ridge of front shoulder)
+    withers_pts = []
     for x in range(withers_x_region[0], withers_x_region[1]):
         ys = np.where(mask[:, x] == 255)[0]
-        if len(ys) > 0 and ys[0] < withers_y:
-            withers_y = int(ys[0])
-            withers_x = x
-    pt_A = (withers_x, withers_y)
+        if len(ys) > 0:
+            withers_pts.append((x, int(ys[0])))
+    pt_A = min(withers_pts, key=lambda p: p[1]) if withers_pts else (int((withers_x_region[0]+withers_x_region[1])/2), ymin)
 
-    # 2. Point B: Hip / Hook bone (highest back point in hind half)
-    hip_y = ymax
-    hip_x = int((hip_x_region[0] + hip_x_region[1]) / 2)
+    # 2. Point B: Hip / Hook bone (top-most ridge of hind hip)
+    hip_pts = []
     for x in range(hip_x_region[0], hip_x_region[1]):
         ys = np.where(mask[:, x] == 255)[0]
-        if len(ys) > 0 and ys[0] < hip_y:
-            hip_y = int(ys[0])
-            hip_x = x
-    pt_B = (hip_x, hip_y)
+        if len(ys) > 0:
+            hip_pts.append((x, int(ys[0])))
+    pt_B = min(hip_pts, key=lambda p: p[1]) if hip_pts else (int((hip_x_region[0]+hip_x_region[1])/2), ymin)
 
-    # 3. Point C: Pin bone (rearmost hip/tail point)
-    pin_y_candidates = []
+    # 3. Point C: Pin bone (rearmost protrusion near tail base)
+    pin_pts = []
     for x in range(pin_x_region[0], pin_x_region[1]):
         ys = np.where(mask[:, x] == 255)[0]
         if len(ys) > 0:
-            pin_y_candidates.append((x, int(ys[0] + 0.25 * (ys[-1] - ys[0]))))
-            
-    if len(pin_y_candidates) > 0:
-        pt_C = min(pin_y_candidates, key=lambda item: item[0]) if facing_right else max(pin_y_candidates, key=lambda item: item[0])
+            target_y = int(ys[0] + 0.35 * (ys[-1] - ys[0]))
+            pin_pts.append((x, target_y))
+    if pin_pts:
+        pt_C = min(pin_pts, key=lambda p: p[0]) if facing_right else max(pin_pts, key=lambda p: p[0])
     else:
         pt_C = (xmin if facing_right else xmax, int(ymin + 0.35 * height_span))
 
-    # 4. Point D: Point of Shoulder (front-most shoulder barrel joint, excluding head)
-    shoulder_y_candidates = []
+    # 4. Point D: Point of Shoulder (front shoulder joint)
+    shoulder_pts = []
     for x in range(shoulder_x_region[0], shoulder_x_region[1]):
         ys = np.where(mask[:, x] == 255)[0]
         if len(ys) > 0:
-            shoulder_y_candidates.append((x, int(ys[0] + 0.40 * (ys[-1] - ys[0]))))
-            
-    if len(shoulder_y_candidates) > 0:
-        pt_D = max(shoulder_y_candidates, key=lambda item: item[0]) if facing_right else min(shoulder_y_candidates, key=lambda item: item[0])
+            target_y = int(ys[0] + 0.45 * (ys[-1] - ys[0]))
+            shoulder_pts.append((x, target_y))
+    if shoulder_pts:
+        pt_D = max(shoulder_pts, key=lambda p: p[0]) if facing_right else min(shoulder_pts, key=lambda p: p[0])
     else:
-        pt_D = (xmax if facing_right else xmin, int(ymin + 0.40 * height_span))
+        pt_D = (xmax if facing_right else xmin, int(ymin + 0.45 * height_span))
 
-    # 5. Point E1: Front Hoof (ground contact beneath front leg)
-    front_leg_ys = np.where(mask[:, withers_x] == 255)[0]
-    e1_y = int(front_leg_ys[-1]) if len(front_leg_ys) > 0 else ymax
-    pt_E1 = (withers_x, e1_y)
+    # 5. Point E1: Front Hoof (ground contact under front shoulder)
+    e1_ys = np.where(mask[:, pt_A[0]] == 255)[0]
+    pt_E1 = (pt_A[0], int(e1_ys[-1])) if len(e1_ys) > 0 else (pt_A[0], ymax)
 
-    # 6. Point E2: Rear Hoof (ground contact beneath hind leg)
-    rear_leg_ys = np.where(mask[:, hip_x] == 255)[0]
-    e2_y = int(rear_leg_ys[-1]) if len(rear_leg_ys) > 0 else ymax
-    pt_E2 = (hip_x, e2_y)
+    # 6. Point E2: Rear Hoof (ground contact under hind leg)
+    e2_ys = np.where(mask[:, pt_B[0]] == 255)[0]
+    pt_E2 = (pt_B[0], int(e2_ys[-1])) if len(e2_ys) > 0 else (pt_B[0], ymax)
 
     # 7. Point F: Flank reference point
     f_x = int((pt_B[0] + pt_C[0]) / 2)
