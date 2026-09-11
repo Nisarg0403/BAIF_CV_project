@@ -10,6 +10,7 @@ class CowSegmenter:
     DeepLabV3-ResNet50 Segmentation Engine
     """
     def __init__(self, device=None):
+        torch.set_num_threads(2)
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         else:

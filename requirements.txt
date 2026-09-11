@@ -19,6 +19,3 @@ fastapi>=0.75.0
 uvicorn>=0.17.0
 python-multipart>=0.0.5
 
-# Development Tools
-jupyter>=1.0.0
-ipykernel>=6.0.0
