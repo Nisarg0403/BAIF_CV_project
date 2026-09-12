@@ -25,14 +25,26 @@ _DEEPLAB_SEGMENTER = None
 _YOLO_SEGMENTER = None
 _MULTIMODEL_PACK = None
 
+import gc
+
 def get_deeplab_segmenter():
-    global _DEEPLAB_SEGMENTER
+    global _DEEPLAB_SEGMENTER, _YOLO_SEGMENTER
+    # Unload YOLO segmenter if loaded to free RAM on Railway 512MB container
+    if _YOLO_SEGMENTER is not None:
+        _YOLO_SEGMENTER = None
+        gc.collect()
+
     if _DEEPLAB_SEGMENTER is None:
         _DEEPLAB_SEGMENTER = CowSegmenter()
     return _DEEPLAB_SEGMENTER
 
 def get_yolo_segmenter():
-    global _YOLO_SEGMENTER
+    global _DEEPLAB_SEGMENTER, _YOLO_SEGMENTER
+    # Unload DeepLab segmenter if loaded to free RAM on Railway 512MB container
+    if _DEEPLAB_SEGMENTER is not None:
+        _DEEPLAB_SEGMENTER = None
+        gc.collect()
+
     if _YOLO_SEGMENTER is None:
         if YOLOv8Segmenter is not None:
             try:
