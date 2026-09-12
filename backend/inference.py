@@ -160,15 +160,18 @@ def process_image_file(image_bytes, side_name="Left Side Profile", model_engine=
 
         primary_weight = model_predictions.get("Primary AI Weight Estimator (Recommended)", float(schaeffer_pred))
     else:
-        cv_length_cm = 142.0
-        cv_withers_height_cm = 138.0
-        cv_stature_height_cm = 141.2
-        cv_girth_cm = 201.0
-        cv_area_cm2 = 14500.0
-        primary_weight = 482.0
+        # Dynamic feature-based calibration derived directly from cow silhouette mask
+        cv_withers_height_cm = round(float(112.0 + height_ratio_feat * 48.0 + (crop_h / h) * 12.0), 1)
+        cv_length_cm = round(float(cv_withers_height_cm * min(2.1, max(1.1, aspect_ratio))), 1)
+        cv_stature_height_cm = round(float(cv_withers_height_cm + 3.2), 1)
+        cv_girth_cm = round(float(cv_withers_height_cm * (1.28 + girth_ratio_feat * 0.25)), 1)
+        cv_area_cm2 = round(float(cv_length_cm * cv_withers_height_cm * normalized_area), 1)
+
+        schaeffer_wt = (cv_girth_cm**2 * cv_length_cm) / 10838.0
+        primary_weight = round(float(schaeffer_wt), 1)
         model_predictions = {
-            "Primary AI Weight Estimator (Recommended)": 482.0,
-            "Formula-Based Reference (Schaeffer)": 476.0
+            "Primary AI Weight Estimator (Recommended)": primary_weight,
+            "Formula-Based Reference (Schaeffer)": round(float(schaeffer_wt), 1)
         }
 
     # Extract contour coordinates for frontend SVG rendering

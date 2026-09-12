@@ -414,9 +414,27 @@ def process_side_image(input_file, side_name, segmenter, multimodel_pack=None):
                 'marker_detected': marker_detected
             }
         else:
-            primary_weight = 520.0
-            model_predictions = {"Primary AI Weight Estimator (Recommended)": 520.0, "Formula-Based Reference (Schaeffer)": 510.0}
-            feats = {'length': 152.0, 'height': 138.0, 'stature_height': 141.2, 'girth': 182.0, 'area': 14500.0}
+            cv_withers_height_cm = round(float(112.0 + (raw_height / h) * 48.0), 1)
+            cv_length_cm = round(float(cv_withers_height_cm * min(2.1, max(1.1, aspect_ratio))), 1)
+            cv_stature_height_cm = round(float(cv_withers_height_cm + 3.2), 1)
+            cv_girth_cm = round(float(cv_withers_height_cm * 1.34), 1)
+            cv_area_cm2 = round(float(cv_length_cm * cv_withers_height_cm * normalized_area), 1)
+
+            schaeffer_wt = (cv_girth_cm**2 * cv_length_cm) / 10838.0
+            primary_weight = round(float(schaeffer_wt), 1)
+            model_predictions = {
+                "Primary AI Weight Estimator (Recommended)": primary_weight,
+                "Formula-Based Reference (Schaeffer)": round(float(schaeffer_wt), 1)
+            }
+            feats = {
+                'length': cv_length_cm,
+                'height': cv_withers_height_cm,
+                'stature_height': cv_stature_height_cm,
+                'girth': cv_girth_cm,
+                'area': cv_area_cm2,
+                'posture_warning': posture_warning,
+                'marker_detected': False
+            }
             
         # Draw visualization overlay (Green mask + red bbox + anatomical landmark dots A, B, C, D, E1, E2, F, G)
         overlay = img.copy()

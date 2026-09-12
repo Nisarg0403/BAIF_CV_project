@@ -1,10 +1,7 @@
-# Datasets & Models (Ignore all local datasets, images, excel files, and model weights)
+# Datasets & Models (Ignore large raw datasets, keep trained model weights)
 data/
 data/*
-models/*.pkl
-models/*.h5
-models/*.pt
-models/*.onnx
+!models/*.pkl
 results/
 *.xlsx
 *.csv
