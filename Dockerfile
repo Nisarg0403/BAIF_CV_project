@@ -29,6 +29,7 @@ RUN mkdir -p data/processed/uploaded_images
 COPY backend/ ./backend/
 COPY src/ ./src/
 COPY models/ ./models/
+COPY yolov8n-seg.pt ./
 
 # Copy compiled static frontend assets from Stage 1
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist

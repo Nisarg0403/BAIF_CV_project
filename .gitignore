@@ -23,4 +23,4 @@ ENV/
 # OS files
 .DS_Store
 Thumbs.db
-yolov8n-seg.pt
+!yolov8n-seg.pt

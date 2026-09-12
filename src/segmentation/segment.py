@@ -76,7 +76,14 @@ class YOLOv8Segmenter:
     YOLOv8 Instance Segmentation Engine with automatic DeepLabV3 fallback
     """
     def __init__(self, model_name: str = 'yolov8n-seg.pt'):
-        print(f"Initializing YOLOv8 Segmenter with model: {model_name}")
+        # Resolve absolute path to model file in project root if relative
+        if not os.path.isabs(model_name):
+            root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+            root_model = os.path.join(root_dir, model_name)
+            if os.path.exists(root_model):
+                model_name = root_model
+
+        print(f"Initializing YOLOv8 Segmenter with model path: {model_name}")
         self._fallback_segmenter = None
         if HAS_YOLO:
             try:
