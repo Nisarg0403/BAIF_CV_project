@@ -4,10 +4,12 @@ import cv2
 import pickle
 import numpy as np
 
+from pathlib import Path
+
 # Ensure project root is on Python path
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.segmentation.segment import CowSegmenter
 try:
