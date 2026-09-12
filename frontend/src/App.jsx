@@ -457,15 +457,25 @@ export default function App() {
                       className="btn-primary" 
                       onClick={() => handleRunPrediction()}
                       disabled={loading}
-                      style={{ flex: 1 }}
+                      style={{ flex: 1, opacity: loading ? 0.85 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
                     >
-                      <Sparkles size={18} />
-                      <span>{loading ? 'Processing AI Models...' : '🔮 Run AI Weight Estimation'}</span>
+                      {loading ? (
+                        <>
+                          <span className="spinner"></span>
+                          <span>Analyzing & Running AI Neural Engine...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={18} />
+                          <span>🔮 Run AI Weight Estimation</span>
+                        </>
+                      )}
                     </button>
 
                     <button 
                       className="btn-secondary"
                       onClick={handleReset}
+                      disabled={loading}
                     >
                       <RefreshCw size={16} /> Clear All
                     </button>
@@ -482,7 +492,40 @@ export default function App() {
             <aside className="card-panel">
               <h3 className="panel-title" style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>Prediction Result</h3>
 
-              {prediction ? (
+              {loading ? (
+                /* State-of-the-Art AI Processing Loading Card */
+                <div className="ai-loading-card">
+                  <div className="ai-loading-radar">
+                    <Sparkles size={28} />
+                  </div>
+                  <h4 style={{ fontFamily: 'var(--font-headline)', fontSize: '1.15rem', fontWeight: 700, marginBottom: '0.3rem', color: '#FFFFFF' }}>
+                    AI Neural Engine Active
+                  </h4>
+                  <p style={{ fontSize: '0.82rem', color: '#94A3B8' }}>
+                    Processing cattle profiles using {engine === 'yolo' ? '⚡ YOLOv8 Segmentation' : '🧠 DeepLabV3+ Semantic Engine'}...
+                  </p>
+
+                  <div className="ai-progress-track">
+                    <div className="ai-progress-bar"></div>
+                  </div>
+
+                  <div className="ai-stage-list">
+                    <div className="ai-stage-item active">
+                      <span className="spinner" style={{ width: 12, height: 12, borderWidth: 1.5 }}></span>
+                      <span> Isolating Cattle Silhouette Contour Mask</span>
+                    </div>
+                    <div className="ai-stage-item active">
+                      <span style={{ color: '#10B981' }}>✓</span>
+                      <span> Extracting Anatomical Keypoints & Morphometry</span>
+                    </div>
+                    <div className="ai-stage-item active">
+                      <span style={{ color: '#10B981' }}>✓</span>
+                      <span> Running XGBoost Biometric Weight Regressor</span>
+                    </div>
+                  </div>
+                </div>
+              ) : prediction ? (
+
                 <>
                   {/* Big Metric Weight Card */}
                   <div className="metric-hero-card">

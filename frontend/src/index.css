@@ -520,3 +520,101 @@ body {
     min-height: 44px;
   }
 }
+
+/* AI Prediction Loading State Animations */
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #FFFFFF;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.ai-loading-card {
+  background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  border-radius: 16px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  color: #FFFFFF;
+  box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.15);
+  margin-bottom: 1.25rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.ai-loading-radar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(16,185,129,0.3) 0%, rgba(16,185,129,0) 70%);
+  border: 2px solid #10B981;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #34D399;
+  margin-bottom: 1rem;
+  animation: pulseRadar 1.5s ease-in-out infinite;
+  position: relative;
+}
+
+@keyframes pulseRadar {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
+  70% { transform: scale(1.05); box-shadow: 0 0 0 16px rgba(16, 185, 129, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+.ai-progress-track {
+  height: 6px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 1.25rem 0 1rem;
+  position: relative;
+}
+
+.ai-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #10B981 0%, #34D399 50%, #60A5FA 100%);
+  border-radius: 3px;
+  animation: shimmerProgress 1.8s ease-in-out infinite;
+  width: 75%;
+}
+
+@keyframes shimmerProgress {
+  0% { width: 15%; }
+  50% { width: 85%; }
+  100% { width: 100%; }
+}
+
+.ai-stage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #94A3B8;
+  text-align: left;
+  margin-top: 1rem;
+  background: rgba(15, 23, 42, 0.6);
+  padding: 0.85rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.ai-stage-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ai-stage-item.active {
+  color: #34D399;
+  font-weight: 600;
+}
+
