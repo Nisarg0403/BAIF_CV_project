@@ -11,12 +11,12 @@
 | Innovation Module | Feature Flag | MAE (kg) | RMSE (kg) | MAPE (%) | R² Score | Latency (ms) |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Baseline Architecture (All Flags OFF)** | `ALL_OFF` | 20.59 | 25.40 | 3.83% | 0.8765 | 1380.0 ms |
-| **Innovation 1: Video Multi-Frame Selection** | `ENABLE_VIDEO_KEYFRAME` | 20.59 | 25.40 | 3.83% | 0.8765 | 7383.1 ms |
+| **Innovation 1: Video Multi-Frame Selection** | `ENABLE_VIDEO_KEYFRAME` | 20.59 | 25.40 | 3.83% | 0.8765 | 7471.8 ms |
 | **Innovation 2: 2D-to-3D Keypoint Unwarper** | `ENABLE_PERSPECTIVE_UNWARP` | 19.82 | 24.45 | 3.69% | 0.8855 | 1380.0 ms |
-| **Innovation 3: Dual-Angle Guided Capture Fusion** | `ENABLE_DUAL_ANGLE` | 1045.71 | 1324.41 | 185.21% | -334.8993 | 7193.4 ms |
+| **Innovation 3: Dual-Angle Guided Capture Fusion** | `ENABLE_DUAL_ANGLE` | 1045.71 | 1324.41 | 185.21% | -334.8993 | 8665.5 ms |
 | **Innovation 4: Zero-Marker EXIF Self-Calibration** | `ENABLE_EXIF_CALIBRATION` | 20.59 | 25.40 | 3.83% | 0.8765 | 1380.0 ms |
 | **Innovation 5: Kolmogorov-Arnold Regressor (KAN)** | `ENABLE_KAN` | 46.71 | 51.96 | 8.29% | 0.4829 | 1380.1 ms |
-| **Innovation 6: Real-Time Quality + XAI Heatmap Cards** | `ENABLE_XAI_CARDS` | 20.59 | 25.40 | 3.83% | 0.8765 | 1491.9 ms |
+| **Innovation 6: Real-Time Quality + XAI Heatmap Cards** | `ENABLE_XAI_CARDS` | 20.59 | 25.40 | 3.83% | 0.8765 | 1494.4 ms |
 
 ---
 
