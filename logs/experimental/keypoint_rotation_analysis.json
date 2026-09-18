@@ -1,0 +1,121 @@
+{
+  "landmark_detector_file": "src/features/landmarks.py",
+  "landmark_detector_function": "detect_anatomical_landmarks(mask, view_type)",
+  "landmark_classification": {
+    "A_Withers": "(a) Hybrid: Min-Y peak within (b) 35%-60% X-window heuristic",
+    "B_Hip_Hook": "(a) Hybrid: Min-Y peak within (b) 62%-85% X-window heuristic",
+    "C_Pin_Bone": "(a) Hybrid: Max-X boundary within (b) 82%-97% X-window heuristic",
+    "D_Point_Shoulder": "(a) Hybrid: Min-X boundary within (b) 22%-40% X-window heuristic",
+    "E1_Front_Hoof": "(b) Geometric derivation: Bottom-most Y under Point A's X-coordinate",
+    "E2_Rear_Hoof": "(b) Geometric derivation: Bottom-most Y under Point B's X-coordinate",
+    "F_Flank": "(b) Pure Geometric derivation: Midpoint of (B_x + C_x)/2, y = B_y + 15% height",
+    "G_Head_Eye": "(b) Pure Geometric derivation: Center of head region X-span, y = ymin + 20% height"
+  },
+  "rotation_test_results": {
+    "rotation_0deg_landmarks": {
+      "A": [
+        283,
+        120
+      ],
+      "B": [
+        317,
+        121
+      ],
+      "C": [
+        447,
+        190
+      ],
+      "D": [
+        167,
+        184
+      ],
+      "E1": [
+        283,
+        280
+      ],
+      "E2": [
+        317,
+        279
+      ],
+      "F": [
+        382,
+        159
+      ],
+      "G": [
+        131,
+        166
+      ]
+    },
+    "rotation_15deg_landmarks": {
+      "A": [
+        303,
+        117
+      ],
+      "B": [
+        341,
+        112
+      ],
+      "C": [
+        443,
+        161
+      ],
+      "D": [
+        163,
+        219
+      ],
+      "E1": [
+        303,
+        281
+      ],
+      "E2": [
+        341,
+        271
+      ],
+      "F": [
+        392,
+        153
+      ],
+      "G": [
+        127,
+        167
+      ]
+    },
+    "rotation_30deg_landmarks": {
+      "A": [
+        316,
+        105
+      ],
+      "B": [
+        365,
+        94
+      ],
+      "C": [
+        459,
+        285
+      ],
+      "D": [
+        172,
+        246
+      ],
+      "E1": [
+        316,
+        387
+      ],
+      "E2": [
+        365,
+        254
+      ],
+      "F": [
+        412,
+        139
+      ],
+      "G": [
+        136,
+        154
+      ]
+    },
+    "withers_point_A_drift_at_15deg_px": 41.38,
+    "withers_point_A_drift_at_30deg_px": 78.57
+  },
+  "behavior_finding": "FINDING: The landmarks re-anchor relative to the NEW bounding box window rather than strictly following physical rigid-body rotation. Because Points A, B, C, D search inside fixed percentage windows of the current mask's bounding box [xmin, xmax, ymin, ymax], rotating the mask changes the bounding box bounds, causing the heuristic search windows to shift. Consequently, the landmark positions re-adapt to the new silhouette bounding box contour rather than remaining fixed to physical anatomical coordinates."
+}
