@@ -1,0 +1,234 @@
+{
+  "total_images_audited": 15,
+  "average_landmarks_detected": 8.0,
+  "overall_success_rate_pct": 100.0,
+  "landmarks_failing_over_30pct": [],
+  "readiness_status": "Partially Implemented (Heuristic Geometry Landmark Detection)",
+  "per_image_audit": [
+    {
+      "image": "baif_field_cattle_1.png",
+      "detected_count": 8,
+      "success_rate_pct": 100.0,
+      "detected_landmarks": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E1",
+        "E2",
+        "F",
+        "G"
+      ]
+    },
+    {
+      "image": "baif_field_cattle_2.png",
+      "detected_count": 8,
+      "success_rate_pct": 100.0,
+      "detected_landmarks": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E1",
+        "E2",
+        "F",
+        "G"
+      ]
+    },
+    {
+      "image": "baif_field_cattle_3.png",
+      "detected_count": 8,
+      "success_rate_pct": 100.0,
+      "detected_landmarks": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E1",
+        "E2",
+        "F",
+        "G"
+      ]
+    },
+    {
+      "image": "baif_field_cattle_4.png",
+      "detected_count": 8,
+      "success_rate_pct": 100.0,
+      "detected_landmarks": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E1",
+        "E2",
+        "F",
+        "G"
+      ]
+    },
+    {
+      "image": "baif_field_cattle_5.png",
+      "detected_count": 8,
+      "success_rate_pct": 100.0,
+      "detected_landmarks": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E1",
+        "E2",
+        "F",
+        "G"
+      ]
+    },
+    {
+      "image": "baif_field_cattle_6.png",
+      "detected_count": 8,
+      "success_rate_pct": 100.0,
+      "detected_landmarks": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E1",
+        "E2",
+        "F",
+        "G"
+      ]
+    },
+    {
+      "image": "baif_field_cattle_7.png",
+      "detected_count": 8,
+      "success_rate_pct": 100.0,
+      "detected_landmarks": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E1",
+        "E2",
+        "F",
+        "G"
+      ]
+    },
+    {
+      "image": "baif_field_cattle_8.png",
+      "detected_count": 8,
+      "success_rate_pct": 100.0,
+      "detected_landmarks": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E1",
+        "E2",
+        "F",
+        "G"
+      ]
+    },
+    {
+      "image": "baif_field_cattle_9.png",
+      "detected_count": 8,
+      "success_rate_pct": 100.0,
+      "detected_landmarks": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E1",
+        "E2",
+        "F",
+        "G"
+      ]
+    },
+    {
+      "image": "baif_field_cattle_10.png",
+      "detected_count": 8,
+      "success_rate_pct": 100.0,
+      "detected_landmarks": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E1",
+        "E2",
+        "F",
+        "G"
+      ]
+    },
+    {
+      "image": "baif_field_cattle_11.png",
+      "detected_count": 8,
+      "success_rate_pct": 100.0,
+      "detected_landmarks": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E1",
+        "E2",
+        "F",
+        "G"
+      ]
+    },
+    {
+      "image": "baif_field_cattle_12.png",
+      "detected_count": 8,
+      "success_rate_pct": 100.0,
+      "detected_landmarks": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E1",
+        "E2",
+        "F",
+        "G"
+      ]
+    },
+    {
+      "image": "baif_field_cattle_13.png",
+      "detected_count": 8,
+      "success_rate_pct": 100.0,
+      "detected_landmarks": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E1",
+        "E2",
+        "F",
+        "G"
+      ]
+    },
+    {
+      "image": "baif_field_cattle_14.png",
+      "detected_count": 8,
+      "success_rate_pct": 100.0,
+      "detected_landmarks": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E1",
+        "E2",
+        "F",
+        "G"
+      ]
+    },
+    {
+      "image": "baif_field_cattle_15.png",
+      "detected_count": 8,
+      "success_rate_pct": 100.0,
+      "detected_landmarks": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E1",
+        "E2",
+        "F",
+        "G"
+      ]
+    }
+  ]
+}
