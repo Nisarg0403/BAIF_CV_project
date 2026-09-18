@@ -35,6 +35,13 @@ COPY yolov8n-seg.pt ./
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 ENV PORT=8000
+ENV PYTHONUNBUFFERED=1
+ENV OMP_NUM_THREADS=1
+ENV MKL_NUM_THREADS=1
+ENV OPENBLAS_NUM_THREADS=1
+ENV VECLIB_MAXIMUM_THREADS=1
+ENV NUMEXPR_NUM_THREADS=1
+
 EXPOSE 8000
 
-CMD ["python", "backend/main.py"]
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
