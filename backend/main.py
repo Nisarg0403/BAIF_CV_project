@@ -388,6 +388,107 @@ async def predict_cattle_weight_ensemble(
         "warning": fallback_warning
     }
 
+@app.post("/api/predict_dual_angle")
+async def predict_cattle_weight_dual_angle(
+    side_file: UploadFile = File(None),
+    rear_file: UploadFile = File(None),
+    left_file: UploadFile = File(None),
+    file: UploadFile = File(None),
+    cattle_id: str = Form("TAG-105730429112"),
+    model_engine: str = Form("deeplab")
+):
+    """
+    Innovation 3: Dual-Angle Guided Capture (Side + 45° Rear View) Endpoint.
+    Combines side profile silhouette with 45° rear view barrel width via cross-attention.
+    Falls back to side profile only and logs to logs/experimental/fallback_predict_dual_angle_<timestamp>.log if rear view is missing or fails.
+    """
+    fallback_warning = None
+    side_upload = side_file or left_file or file
+    
+    if not side_upload:
+        raise HTTPException(status_code=400, detail="No side profile photo uploaded.")
+
+    try:
+        side_bytes = await side_upload.read()
+        if not side_bytes:
+            raise ValueError("Empty side file payload received.")
+
+        res_side = process_image_file(side_bytes, side_name="Left Side Profile", model_engine=model_engine)
+
+        # Attempt Dual-Angle Fusion if rear_file is provided
+        if rear_file:
+            rear_bytes = await rear_file.read()
+            if rear_bytes:
+                rear_arr = np.asarray(bytearray(rear_bytes), dtype=np.uint8)
+                rear_img = cv2.imdecode(rear_arr, 1)
+                if rear_img is not None:
+                    # Segment rear view
+                    from backend.inference import get_deeplab_segmenter, get_yolo_segmenter
+                    segmenter = get_yolo_segmenter() if model_engine.lower() == "yolo" else get_deeplab_segmenter()
+                    
+                    rh, rw, _ = rear_img.shape
+                    if max(rh, rw) > 800:
+                        scale = 800.0 / max(rh, rw)
+                        small_rear = cv2.resize(rear_img, (int(rw * scale), int(rh * scale)))
+                    else:
+                        small_rear = rear_img.copy()
+                    
+                    rear_mask = segmenter.segment(small_rear)
+                    
+                    from src.models.dual_angle_fusion import DualAngleFusionModule
+                    fusion_module = DualAngleFusionModule()
+                    fused_res = fusion_module.process_dual_views(res_side, rear_mask=rear_mask)
+                    
+                    res_side["weight_kg"] = fused_res["fused_weight_kg"]
+                    res_side["dual_angle_fusion"] = fused_res
+                    if "model_predictions" in res_side:
+                        res_side["model_predictions"]["Dual-Angle Cross-Attention Fusion"] = fused_res["fused_weight_kg"]
+            else:
+                raise ValueError("Rear view payload empty.")
+        else:
+            raise ValueError("Rear view photo not provided for dual-angle fusion.")
+
+    except Exception as e:
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_dir = os.path.join(PROJECT_ROOT, "logs", "experimental")
+        os.makedirs(log_dir, exist_ok=True)
+        fallback_log = os.path.join(log_dir, f"fallback_predict_dual_angle_{timestamp_str}.log")
+        with open(fallback_log, "w", encoding="utf-8") as f_log:
+            f_log.write(f"Dual angle fusion failed or rear image missing: {e}\n")
+        
+        fallback_warning = "dual_angle_fallback"
+        if side_upload:
+            await side_upload.seek(0)
+            side_bytes = await side_upload.read()
+            res_side = process_image_file(side_bytes, side_name="Left Side Profile", model_engine=model_engine)
+        res_side["warning"] = fallback_warning
+
+    b64_img = base64.b64encode(side_bytes).decode("utf-8")
+    data_url = f"data:image/jpeg;base64,{b64_img}"
+    pred_id = str(uuid.uuid4())[:8]
+
+    log_entry = {
+        "id": pred_id,
+        "cattle_id": cattle_id,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
+        "engine": model_engine,
+        "weight": res_side["weight_kg"],
+        "confidence_pct": res_side["confidence_pct"],
+        "measurements": res_side["measurements"]
+    }
+    save_history_entry(log_entry)
+
+    return {
+        "success": True,
+        "id": pred_id,
+        "cattle_id": cattle_id,
+        "timestamp": log_entry["timestamp"],
+        "image_data_url": data_url,
+        "prediction": res_side,
+        "warning": fallback_warning
+    }
+
+
 
 
 @app.get("/api/history")

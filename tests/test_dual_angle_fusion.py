@@ -83,3 +83,32 @@ def test_dual_angle_flag_defaults_to_false():
 
     assert cfg.get("features", {}).get("ENABLE_DUAL_ANGLE") is False, \
         "ENABLE_DUAL_ANGLE flag must default to false."
+
+def test_predict_dual_angle_endpoint_fallback():
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    import io
+
+    client = TestClient(app)
+
+    img_path = os.path.join(os.path.dirname(__file__), "..", "data", "processed", "uploaded_images", "be39ef2e_105730429112_LL_1.jpg")
+    if not os.path.exists(img_path):
+        pytest.skip("Test image not found.")
+
+    with open(img_path, "rb") as f:
+        side_bytes = f.read()
+
+    response = client.post(
+        "/api/predict_dual_angle",
+        files={"side_file": ("side.jpg", io.BytesIO(side_bytes), "image/jpeg")},
+        data={"cattle_id": "TAG-TEST-DUAL", "model_engine": "deeplab"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["warning"] == "dual_angle_fallback"
+    assert "prediction" in data
+    assert data["prediction"]["weight_kg"] > 0
+
+
