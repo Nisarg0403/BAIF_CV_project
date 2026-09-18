@@ -17,9 +17,18 @@ def compute_cross_attention_weights(side_feats: np.ndarray, rear_feats: np.ndarr
     q = np.atleast_2d(side_feats)
     k = np.atleast_2d(rear_feats)
     
+    # Feature-wise physical scale normalization to prevent softmax saturation
+    # Expected maximum bounds: [length (200.0 cm), height (200.0 cm), area (40000.0 cm2)]
+    scale = np.array([200.0, 200.0, 40000.0], dtype=np.float64)
+    if q.shape[1] > 3:
+        scale = np.ones(q.shape[1], dtype=np.float64)
+
+    q_norm = q / scale[:q.shape[1]]
+    k_norm = k / scale[:k.shape[1]]
+
     d_k = q.shape[1]
     # Channelwise cross-attention score
-    scores = (q * k) / math.sqrt(d_k)
+    scores = (q_norm * k_norm) / math.sqrt(d_k)
     # Softmax normalization over feature dimension
     exp_scores = np.exp(scores - np.max(scores, axis=-1, keepdims=True))
     weights = exp_scores / np.sum(exp_scores, axis=-1, keepdims=True)

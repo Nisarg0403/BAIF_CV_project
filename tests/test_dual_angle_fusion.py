@@ -19,6 +19,22 @@ def test_cross_attention_weights():
     assert np.isclose(np.sum(weights), 1.0)
     assert np.all(weights >= 0)
 
+def test_cross_attention_input_adaptivity():
+    # Pair 1: A_side = 12000 cm2, W_barrel = 60 cm
+    res1 = fuse_dual_angle_morphometrics(
+        side_length_cm=140.0, side_height_cm=125.0, side_area_cm2=12000.0, rear_barrel_width_cm=60.0
+    )
+    # Pair 2: A_side = 18000 cm2, W_barrel = 85 cm
+    res2 = fuse_dual_angle_morphometrics(
+        side_length_cm=140.0, side_height_cm=125.0, side_area_cm2=18000.0, rear_barrel_width_cm=85.0
+    )
+
+    w1 = np.array(res1["cross_attention_weights"])
+    w2 = np.array(res2["cross_attention_weights"])
+
+    assert not np.allclose(w1, w2), "Cross-attention weights must adapt dynamically to different input features!"
+
+
 def test_fuse_dual_angle_morphometrics():
     side_len = 140.0
     side_h = 125.0
