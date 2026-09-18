@@ -118,3 +118,14 @@ flowchart TD
 ### Layer 6: Explainable AI & Client Presentation (`React + Vite / Streamlit`)
 - **XAI Heatmap Component**: Renders LIME/SHAP visual overlays highlighting the ribcage, abdomen, and hindquarters.
 - **Model Proofs Card**: Displays validated benchmarks (N=15 BAIF cattle) with confidence intervals.
+
+---
+
+## 3. Deferred Work
+
+### Keypoint Detector Upgrade (Innovation 2 Perspective Unwarper Dependency)
+- **Status**: Deferred to post-roadmap implementation.
+- **Rationale**: Pre-flight audit revealed that the current heuristic landmark detector (`src/features/landmarks.py`) re-anchors search windows relative to silhouette bounding boxes, experiencing coordinate drift of **41.38 pixels at 15° rotation** and **78.57 pixels at 30° rotation**.
+- **Upgrade Requirement**: To reach full intended perspective unwarping accuracy without bounding box drift, Innovation 2's affine unwarper requires a trained deep keypoint neural network (e.g. HRNet, YOLOv8-Pose, or MobileNet-Pose) trained on annotated livestock anatomical landmarks.
+- **Production Status**: `ENABLE_PERSPECTIVE_UNWARP` defaults to `false` in `configs/features.yaml` until the keypoint model upgrade is completed.
+
