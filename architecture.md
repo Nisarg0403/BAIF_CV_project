@@ -116,8 +116,10 @@ flowchart TD
 - **Schaeffer Baseline**: $W = \frac{G^2 \times L}{10838}$ for comparison.
 
 ### Layer 6: Explainable AI & Client Presentation (`React + Vite / Streamlit`)
-- **XAI Heatmap Component**: Renders LIME/SHAP visual overlays highlighting the ribcage, abdomen, and hindquarters.
-- **Model Proofs Card**: Displays validated benchmarks (N=15 BAIF cattle) with confidence intervals.
+- **SHAP Feature Attribution**: Uses `TreeExplainer` on the primary XGBoost regressor to compute exact marginal attributions for chest girth, silhouette area, body length, and withers height.
+- **Visual Saliency Heatmap Overlay**: Generates a JET/Plasma color-mapped visual overlay mapped onto anatomical regions (Ribcage, Abdomen, Withers, Rump) blended directly onto the cattle RGB photo, exported as Base64 JPEG (`xai_heatmap_b64`).
+- **XAI Visual Cards**: Renders interactive model explainability cards presenting feature impact rankings and benchmark confidence intervals ($N=15$ BAIF field cattle). Toggled via `ENABLE_XAI_CARDS` feature flag.
+
 
 ---
 
