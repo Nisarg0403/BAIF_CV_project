@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional, List
 import cv2
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
@@ -19,7 +19,63 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.inference import process_image_file
+from backend.inference import process_image_file, get_effective_feature_flags
+
+def extract_request_feature_flags(
+    x_feature_flags: Optional[str] = None,
+    x_enable_unwarp: Optional[str] = None,
+    x_enable_exif: Optional[str] = None,
+    x_enable_xai: Optional[str] = None,
+    x_enable_kan: Optional[str] = None,
+    x_enable_video: Optional[str] = None,
+    x_enable_dual_angle: Optional[str] = None,
+    form_flags: Optional[str] = None
+) -> dict:
+    overrides = {}
+    
+    for flag_str in [x_feature_flags, form_flags]:
+        if flag_str:
+            if flag_str.startswith("{"):
+                try:
+                    overrides.update(json.loads(flag_str))
+                except Exception:
+                    pass
+            else:
+                parts = flag_str.split(",")
+                for part in parts:
+                    if "=" in part:
+                        k, v = part.split("=", 1)
+                        overrides[k.strip().upper()] = v.strip().lower() in ("true", "1", "yes")
+    
+    if x_enable_unwarp is not None:
+        overrides["ENABLE_PERSPECTIVE_UNWARP"] = x_enable_unwarp.lower() in ("true", "1", "yes")
+    if x_enable_exif is not None:
+        overrides["ENABLE_EXIF_CALIBRATION"] = x_enable_exif.lower() in ("true", "1", "yes")
+    if x_enable_xai is not None:
+        overrides["ENABLE_XAI_CARDS"] = x_enable_xai.lower() in ("true", "1", "yes")
+    if x_enable_kan is not None:
+        overrides["ENABLE_KAN"] = x_enable_kan.lower() in ("true", "1", "yes")
+    if x_enable_video is not None:
+        overrides["ENABLE_VIDEO_KEYFRAME"] = x_enable_video.lower() in ("true", "1", "yes")
+    if x_enable_dual_angle is not None:
+        overrides["ENABLE_DUAL_ANGLE"] = x_enable_dual_angle.lower() in ("true", "1", "yes")
+
+    return overrides
+
+def audit_log_flags(endpoint: str, effective_flags: dict):
+    timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    log_dir = os.path.join(PROJECT_ROOT, "logs", "experimental")
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, f"request_flags_{timestamp_str}.log")
+    try:
+        with open(log_file, "w", encoding="utf-8") as f:
+            f.write(f"Timestamp: {datetime.now().isoformat()}\n")
+            f.write(f"Endpoint: {endpoint}\n")
+            f.write("Effective Feature Flags:\n")
+            for k, v in sorted(effective_flags.items()):
+                f.write(f"  {k}: {v}\n")
+    except Exception as e:
+        print(f"Warning writing flag audit log: {e}")
 
 app = FastAPI(
     title="CattleWeightAI API",
@@ -103,9 +159,30 @@ async def predict_cattle_weight(
     rear_file: UploadFile = File(None),
     cattle_id: str = Form("TAG-105730429112"),
     model_engine: str = Form("deeplab"),
-    side_name: str = Form("Left Side Profile")
+    side_name: str = Form("Left Side Profile"),
+    feature_flags_form: Optional[str] = Form(None),
+    x_feature_flags: Optional[str] = Header(None),
+    x_enable_unwarp: Optional[str] = Header(None),
+    x_enable_exif: Optional[str] = Header(None),
+    x_enable_xai: Optional[str] = Header(None),
+    x_enable_kan: Optional[str] = Header(None),
+    x_enable_video: Optional[str] = Header(None),
+    x_enable_dual_angle: Optional[str] = Header(None)
 ):
     try:
+        request_overrides = extract_request_feature_flags(
+            x_feature_flags=x_feature_flags,
+            x_enable_unwarp=x_enable_unwarp,
+            x_enable_exif=x_enable_exif,
+            x_enable_xai=x_enable_xai,
+            x_enable_kan=x_enable_kan,
+            x_enable_video=x_enable_video,
+            x_enable_dual_angle=x_enable_dual_angle,
+            form_flags=feature_flags_form
+        )
+        effective_flags = get_effective_feature_flags(request_overrides)
+        audit_log_flags("/api/predict", effective_flags)
+
         results_by_side = {}
         primary_file_bytes = None
         primary_data_url = None
@@ -115,7 +192,7 @@ async def predict_cattle_weight(
         if left_file:
             left_bytes = await left_file.read()
             primary_file_bytes = left_bytes
-            res_left = process_image_file(left_bytes, side_name="Left Side Profile", model_engine=model_engine)
+            res_left = process_image_file(left_bytes, side_name="Left Side Profile", model_engine=model_engine, feature_flags=effective_flags)
             results_by_side["left"] = res_left
             b64_img = base64.b64encode(left_bytes).decode("utf-8")
             primary_data_url = f"data:image/jpeg;base64,{b64_img}"
@@ -127,7 +204,7 @@ async def predict_cattle_weight(
                 primary_file_bytes = right_bytes
                 b64_img = base64.b64encode(right_bytes).decode("utf-8")
                 primary_data_url = f"data:image/jpeg;base64,{b64_img}"
-            res_right = process_image_file(right_bytes, side_name="Right Side Profile", model_engine=model_engine)
+            res_right = process_image_file(right_bytes, side_name="Right Side Profile", model_engine=model_engine, feature_flags=effective_flags)
             results_by_side["right"] = res_right
 
         # 3. Process Rear View
@@ -137,7 +214,7 @@ async def predict_cattle_weight(
                 primary_file_bytes = rear_bytes
                 b64_img = base64.b64encode(rear_bytes).decode("utf-8")
                 primary_data_url = f"data:image/jpeg;base64,{b64_img}"
-            res_rear = process_image_file(rear_bytes, side_name="Rear View", model_engine=model_engine)
+            res_rear = process_image_file(rear_bytes, side_name="Rear View", model_engine=model_engine, feature_flags=effective_flags)
             results_by_side["rear"] = res_rear
 
         # Fallback to single 'file' parameter if multi-view parameters weren't passed
@@ -146,7 +223,7 @@ async def predict_cattle_weight(
             primary_file_bytes = single_bytes
             b64_img = base64.b64encode(single_bytes).decode("utf-8")
             primary_data_url = f"data:image/jpeg;base64,{b64_img}"
-            res_single = process_image_file(single_bytes, side_name=side_name, model_engine=model_engine)
+            res_single = process_image_file(single_bytes, side_name=side_name, model_engine=model_engine, feature_flags=effective_flags)
             results_by_side["left"] = res_single
 
         if not results_by_side:
@@ -192,13 +269,34 @@ async def predict_cattle_weight(
 async def predict_cattle_weight_video(
     video_file: UploadFile = File(...),
     cattle_id: str = Form("TAG-105730429112"),
-    model_engine: str = Form("deeplab")
+    model_engine: str = Form("deeplab"),
+    feature_flags_form: Optional[str] = Form(None),
+    x_feature_flags: Optional[str] = Header(None),
+    x_enable_unwarp: Optional[str] = Header(None),
+    x_enable_exif: Optional[str] = Header(None),
+    x_enable_xai: Optional[str] = Header(None),
+    x_enable_kan: Optional[str] = Header(None),
+    x_enable_video: Optional[str] = Header(None),
+    x_enable_dual_angle: Optional[str] = Header(None)
 ):
     """
     Innovation 1: Multi-frame Video Keyframe Selection Endpoint.
     Accepts video input, extracts optimal keyframe, and delegates to existing inference logic.
     Falls back to frame 0 on any exception.
     """
+    request_overrides = extract_request_feature_flags(
+        x_feature_flags=x_feature_flags,
+        x_enable_unwarp=x_enable_unwarp,
+        x_enable_exif=x_enable_exif,
+        x_enable_xai=x_enable_xai,
+        x_enable_kan=x_enable_kan,
+        x_enable_video=x_enable_video,
+        x_enable_dual_angle=x_enable_dual_angle,
+        form_flags=feature_flags_form
+    )
+    effective_flags = get_effective_feature_flags(request_overrides)
+    audit_log_flags("/api/predict_video", effective_flags)
+
     fallback_warning = None
     try:
         video_bytes = await video_file.read()
@@ -244,7 +342,7 @@ async def predict_cattle_weight_video(
             raise HTTPException(status_code=400, detail=f"Video processing & fallback failed: {fb_err}")
 
     # Delegate to existing process_image_file logic
-    res = process_image_file(img_bytes, side_name="Left Side Profile", model_engine=model_engine)
+    res = process_image_file(img_bytes, side_name="Left Side Profile", model_engine=model_engine, feature_flags=effective_flags)
     b64_img = base64.b64encode(img_bytes).decode("utf-8")
     data_url = f"data:image/jpeg;base64,{b64_img}"
     pred_id = str(uuid.uuid4())[:8]
@@ -277,18 +375,39 @@ async def predict_cattle_weight_video(
 async def predict_cattle_weight_kan(
     file: UploadFile = File(None),
     cattle_id: str = Form("TAG-105730429112"),
-    model_engine: str = Form("deeplab")
+    model_engine: str = Form("deeplab"),
+    feature_flags_form: Optional[str] = Form(None),
+    x_feature_flags: Optional[str] = Header(None),
+    x_enable_unwarp: Optional[str] = Header(None),
+    x_enable_exif: Optional[str] = Header(None),
+    x_enable_xai: Optional[str] = Header(None),
+    x_enable_kan: Optional[str] = Header(None),
+    x_enable_video: Optional[str] = Header(None),
+    x_enable_dual_angle: Optional[str] = Header(None)
 ):
     """
     Innovation 5: Isolated PyTorch B-spline KAN Regressor Endpoint.
     Falls back to XGBoost baseline with warning on any failure.
     """
+    request_overrides = extract_request_feature_flags(
+        x_feature_flags=x_feature_flags,
+        x_enable_unwarp=x_enable_unwarp,
+        x_enable_exif=x_enable_exif,
+        x_enable_xai=x_enable_xai,
+        x_enable_kan=x_enable_kan,
+        x_enable_video=x_enable_video,
+        x_enable_dual_angle=x_enable_dual_angle,
+        form_flags=feature_flags_form
+    )
+    effective_flags = get_effective_feature_flags(request_overrides)
+    audit_log_flags("/api/predict_kan", effective_flags)
+
     fallback_warning = None
     try:
         if not file:
             raise ValueError("No file uploaded.")
         img_bytes = await file.read()
-        res = process_image_file(img_bytes, side_name="Left Side Profile", model_engine=model_engine)
+        res = process_image_file(img_bytes, side_name="Left Side Profile", model_engine=model_engine, feature_flags=effective_flags)
         
         m = res["measurements"]
         X_feat = np.array([[m["body_length_cm"], m["chest_girth_cm"], m["silhouette_area_cm2"], m["withers_height_cm"]]])
@@ -313,7 +432,7 @@ async def predict_cattle_weight_kan(
         if file:
             await file.seek(0)
             img_bytes = await file.read()
-            res = process_image_file(img_bytes, side_name="Left Side Profile", model_engine=model_engine)
+            res = process_image_file(img_bytes, side_name="Left Side Profile", model_engine=model_engine, feature_flags=effective_flags)
         res["warning"] = fallback_warning
 
     b64_img = base64.b64encode(img_bytes).decode("utf-8")
@@ -335,18 +454,39 @@ async def predict_cattle_weight_ensemble(
     file: UploadFile = File(None),
     cattle_id: str = Form("TAG-105730429112"),
     model_engine: str = Form("deeplab"),
-    alpha: float = Form(1.0)
+    alpha: float = Form(1.0),
+    feature_flags_form: Optional[str] = Form(None),
+    x_feature_flags: Optional[str] = Header(None),
+    x_enable_unwarp: Optional[str] = Header(None),
+    x_enable_exif: Optional[str] = Header(None),
+    x_enable_xai: Optional[str] = Header(None),
+    x_enable_kan: Optional[str] = Header(None),
+    x_enable_video: Optional[str] = Header(None),
+    x_enable_dual_angle: Optional[str] = Header(None)
 ):
     """
     Innovation 5: Weighted XGBoost + KAN Ensemble Endpoint (final_weight = alpha * XGB + (1-alpha) * KAN).
     Default alpha = 1.0 preserves pure XGBoost baseline. Falls back to pure XGBoost on failure.
     """
+    request_overrides = extract_request_feature_flags(
+        x_feature_flags=x_feature_flags,
+        x_enable_unwarp=x_enable_unwarp,
+        x_enable_exif=x_enable_exif,
+        x_enable_xai=x_enable_xai,
+        x_enable_kan=x_enable_kan,
+        x_enable_video=x_enable_video,
+        x_enable_dual_angle=x_enable_dual_angle,
+        form_flags=feature_flags_form
+    )
+    effective_flags = get_effective_feature_flags(request_overrides)
+    audit_log_flags("/api/predict_ensemble", effective_flags)
+
     fallback_warning = None
     try:
         if not file:
             raise ValueError("No file uploaded.")
         img_bytes = await file.read()
-        res = process_image_file(img_bytes, side_name="Left Side Profile", model_engine=model_engine)
+        res = process_image_file(img_bytes, side_name="Left Side Profile", model_engine=model_engine, feature_flags=effective_flags)
         
         xgb_weight = res["weight_kg"]
         m = res["measurements"]
@@ -371,7 +511,7 @@ async def predict_cattle_weight_ensemble(
         if file:
             await file.seek(0)
             img_bytes = await file.read()
-            res = process_image_file(img_bytes, side_name="Left Side Profile", model_engine=model_engine)
+            res = process_image_file(img_bytes, side_name="Left Side Profile", model_engine=model_engine, feature_flags=effective_flags)
         res["warning"] = fallback_warning
 
     b64_img = base64.b64encode(img_bytes).decode("utf-8")
@@ -395,13 +535,34 @@ async def predict_cattle_weight_dual_angle(
     left_file: UploadFile = File(None),
     file: UploadFile = File(None),
     cattle_id: str = Form("TAG-105730429112"),
-    model_engine: str = Form("deeplab")
+    model_engine: str = Form("deeplab"),
+    feature_flags_form: Optional[str] = Form(None),
+    x_feature_flags: Optional[str] = Header(None),
+    x_enable_unwarp: Optional[str] = Header(None),
+    x_enable_exif: Optional[str] = Header(None),
+    x_enable_xai: Optional[str] = Header(None),
+    x_enable_kan: Optional[str] = Header(None),
+    x_enable_video: Optional[str] = Header(None),
+    x_enable_dual_angle: Optional[str] = Header(None)
 ):
     """
     Innovation 3: Dual-Angle Guided Capture (Side + 45° Rear View) Endpoint.
     Combines side profile silhouette with 45° rear view barrel width via cross-attention.
     Falls back to side profile only and logs to logs/experimental/fallback_predict_dual_angle_<timestamp>.log if rear view is missing or fails.
     """
+    request_overrides = extract_request_feature_flags(
+        x_feature_flags=x_feature_flags,
+        x_enable_unwarp=x_enable_unwarp,
+        x_enable_exif=x_enable_exif,
+        x_enable_xai=x_enable_xai,
+        x_enable_kan=x_enable_kan,
+        x_enable_video=x_enable_video,
+        x_enable_dual_angle=x_enable_dual_angle,
+        form_flags=feature_flags_form
+    )
+    effective_flags = get_effective_feature_flags(request_overrides)
+    audit_log_flags("/api/predict_dual_angle", effective_flags)
+
     fallback_warning = None
     side_upload = side_file or left_file or file
     
@@ -413,7 +574,7 @@ async def predict_cattle_weight_dual_angle(
         if not side_bytes:
             raise ValueError("Empty side file payload received.")
 
-        res_side = process_image_file(side_bytes, side_name="Left Side Profile", model_engine=model_engine)
+        res_side = process_image_file(side_bytes, side_name="Left Side Profile", model_engine=model_engine, feature_flags=effective_flags)
 
         # Attempt Dual-Angle Fusion if rear_file is provided
         if rear_file:
@@ -460,7 +621,7 @@ async def predict_cattle_weight_dual_angle(
         if side_upload:
             await side_upload.seek(0)
             side_bytes = await side_upload.read()
-            res_side = process_image_file(side_bytes, side_name="Left Side Profile", model_engine=model_engine)
+            res_side = process_image_file(side_bytes, side_name="Left Side Profile", model_engine=model_engine, feature_flags=effective_flags)
         res_side["warning"] = fallback_warning
 
     b64_img = base64.b64encode(side_bytes).decode("utf-8")

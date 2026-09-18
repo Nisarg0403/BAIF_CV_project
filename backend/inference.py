@@ -20,6 +20,38 @@ except ImportError:
 from src.features.morphometry import extract_morphometric_features
 from src.features.landmarks import detect_anatomical_landmarks, draw_landmark_overlay
 
+def load_base_feature_flags() -> dict:
+    config_path = os.path.join(PROJECT_ROOT, "configs", "features.yaml")
+    flags = {
+        "ENABLE_DUAL_ANGLE": False,
+        "ENABLE_EXIF_CALIBRATION": False,
+        "ENABLE_KAN": False,
+        "ENABLE_PERSPECTIVE_UNWARP": False,
+        "ENABLE_VIDEO_KEYFRAME": False,
+        "ENABLE_XAI_CARDS": False
+    }
+    if os.path.exists(config_path):
+        try:
+            import yaml
+            with open(config_path, "r") as f_cfg:
+                cfg_data = yaml.safe_load(f_cfg)
+                if isinstance(cfg_data, dict) and "features" in cfg_data:
+                    flags.update(cfg_data["features"])
+        except Exception:
+            pass
+    return flags
+
+def get_effective_feature_flags(request_overrides: dict = None) -> dict:
+    flags = load_base_feature_flags()
+    if request_overrides:
+        for k, v in request_overrides.items():
+            if k in flags:
+                if isinstance(v, str):
+                    flags[k] = v.lower() in ("true", "1", "yes")
+                else:
+                    flags[k] = bool(v)
+    return flags
+
 # Global model caches
 _DEEPLAB_SEGMENTER = None
 _YOLO_SEGMENTER = None
@@ -65,7 +97,7 @@ def get_multimodel_pack():
                 _MULTIMODEL_PACK = pickle.load(f)
     return _MULTIMODEL_PACK
 
-def process_image_file(image_bytes, side_name="Left Side Profile", model_engine="deeplab"):
+def process_image_file(image_bytes, side_name="Left Side Profile", model_engine="deeplab", feature_flags=None):
     """
     Processes an input image byte stream:
     1. Decodes image into numpy array
@@ -74,6 +106,8 @@ def process_image_file(image_bytes, side_name="Left Side Profile", model_engine=
     4. Predicts real physical dimensions (Length cm, Withers Height cm, Chest Girth cm) & Weight (kg)
     Returns a dict with all live, dynamic measurements & visual overlay data.
     """
+    effective_flags = get_effective_feature_flags(feature_flags)
+
     file_bytes = np.asarray(bytearray(image_bytes), dtype=np.uint8)
     img = cv2.imdecode(file_bytes, 1)
     if img is None:
@@ -123,15 +157,7 @@ def process_image_file(image_bytes, side_name="Left Side Profile", model_engine=
     # Optional Innovation 2: Perspective Unwarping (Default OFF)
     unwarp_meta = None
     try:
-        import yaml
-        config_path = os.path.join(PROJECT_ROOT, "configs", "features.yaml")
-        enable_unwarp = False
-        if os.path.exists(config_path):
-            with open(config_path, "r") as f_cfg:
-                cfg_data = yaml.safe_load(f_cfg)
-                enable_unwarp = cfg_data.get("features", {}).get("ENABLE_PERSPECTIVE_UNWARP", False)
-        
-        if enable_unwarp:
+        if effective_flags.get("ENABLE_PERSPECTIVE_UNWARP"):
             from src.features.perspective_unwarper import unwarp_mask
             mask, unwarp_meta = unwarp_mask(mask, landmarks)
     except Exception as unwarp_err:
@@ -235,15 +261,7 @@ def process_image_file(image_bytes, side_name="Left Side Profile", model_engine=
     # Optional Innovation 4: Zero-Marker EXIF Calibration (Default OFF)
     exif_calibration = None
     try:
-        import yaml
-        config_path = os.path.join(PROJECT_ROOT, "configs", "features.yaml")
-        enable_exif = False
-        if os.path.exists(config_path):
-            with open(config_path, "r") as f_cfg:
-                cfg_data = yaml.safe_load(f_cfg)
-                enable_exif = cfg_data.get("features", {}).get("ENABLE_EXIF_CALIBRATION", False)
-        
-        if enable_exif:
+        if effective_flags.get("ENABLE_EXIF_CALIBRATION"):
             from src.features.exif_scale_calibrator import EXIFScaleCalibrator
             withers_scale_cm_px = float(cv_withers_height_cm / raw_height) if raw_height > 0 else 0.3
             calibrator = EXIFScaleCalibrator(estimated_distance_cm=225.0, threshold_pct=10.0)
@@ -256,15 +274,7 @@ def process_image_file(image_bytes, side_name="Left Side Profile", model_engine=
     # Optional Innovation 6: XAI Visual Cards & Heatmap (Default OFF)
     xai_explanation = None
     try:
-        import yaml
-        config_path = os.path.join(PROJECT_ROOT, "configs", "features.yaml")
-        enable_xai = False
-        if os.path.exists(config_path):
-            with open(config_path, "r") as f_cfg:
-                cfg_data = yaml.safe_load(f_cfg)
-                enable_xai = cfg_data.get("features", {}).get("ENABLE_XAI_CARDS", False)
-
-        if enable_xai:
+        if effective_flags.get("ENABLE_XAI_CARDS"):
             from src.evaluation.xai_explainer import XAIExplainer
             explainer = XAIExplainer()
             meas_dict = {
