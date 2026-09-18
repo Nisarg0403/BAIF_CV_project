@@ -1,0 +1,12 @@
+# Optional / Experimental Dependencies for BAIF Innovations
+# Install with: pip install -r requirements-experimental.txt
+
+# KAN Regressor B-spline learning (Optional)
+pykan>=0.2.0
+
+# Explainable AI (XAI) feature importance heatmaps (Innovation 6)
+shap>=0.42.0
+lime>=0.2.0
+
+# Web Scraper / Crawler for Literature Verification
+crawl4ai>=0.9.0
