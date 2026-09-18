@@ -118,8 +118,26 @@ def process_image_file(image_bytes, side_name="Left Side Profile", model_engine=
     crop_w = xmax - xmin + 1
 
     # Extract morphometric features
-    raw_feats = extract_morphometric_features(mask)
     landmarks = detect_anatomical_landmarks(mask, view_type=side_name)
+    
+    # Optional Innovation 2: Perspective Unwarping (Default OFF)
+    unwarp_meta = None
+    try:
+        import yaml
+        config_path = os.path.join(PROJECT_ROOT, "configs", "features.yaml")
+        enable_unwarp = False
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f_cfg:
+                cfg_data = yaml.safe_load(f_cfg)
+                enable_unwarp = cfg_data.get("features", {}).get("ENABLE_PERSPECTIVE_UNWARP", False)
+        
+        if enable_unwarp:
+            from src.features.perspective_unwarper import unwarp_mask
+            mask, unwarp_meta = unwarp_mask(mask, landmarks)
+    except Exception as unwarp_err:
+        pass
+
+    raw_feats = extract_morphometric_features(mask)
 
     raw_len = float(raw_feats['length'])
     raw_height = float(raw_feats['height'])
