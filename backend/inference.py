@@ -112,11 +112,11 @@ def process_image_file(image_bytes, side_name="Left Side Profile", model_engine=
 
     h, w, _ = img.shape
     
-    # Downscale image to max_dim=800 for segmentation speed & consistency
+    # Downscale image to max_dim=800 (<= 1024px) before segmentation to cap memory footprint
     max_dim = 800
     if max(h, w) > max_dim:
-        scale = max_dim / max(h, w)
-        small_img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+        scale = max_dim / float(max(h, w))
+        small_img = cv2.resize(img, (int(round(w * scale)), int(round(h * scale))), interpolation=cv2.INTER_AREA)
     else:
         small_img = img.copy()
 
