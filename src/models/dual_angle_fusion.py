@@ -150,6 +150,8 @@ class DualAngleFusionModule:
             px_height = side_meas.get("raw_height_px", 400.0)
             cm_px_scale = side_height / px_height if px_height > 0 else 0.3
             rear_barrel_width_cm = self.extract_rear_barrel_width(rear_mask, calibration_factor=cm_px_scale)
+            # Anatomical sanity guard: barrel width of mature cattle is at most 55% of withers height
+            rear_barrel_width_cm = min(rear_barrel_width_cm, side_height * 0.55)
 
         if rear_barrel_width_cm is None:
             raise ValueError("Rear barrel width could not be determined.")
