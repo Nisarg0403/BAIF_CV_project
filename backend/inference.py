@@ -127,6 +127,8 @@ def process_image_file(image_bytes, side_name="Left Side Profile", model_engine=
         segmenter = get_deeplab_segmenter()
 
     small_mask = segmenter.segment(small_img)
+    del small_img
+
     if np.sum(small_mask) == 0:
         raise ValueError("Segmentation failed: Could not isolate cattle silhouette.")
 
@@ -139,6 +141,7 @@ def process_image_file(image_bytes, side_name="Left Side Profile", model_engine=
         small_mask = clean_mask
 
     mask = cv2.resize(small_mask, (w, h), interpolation=cv2.INTER_NEAREST)
+    del small_mask
 
     # 2. Bounding Box & Contour
     y_indices, x_indices = np.nonzero(mask)

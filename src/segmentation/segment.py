@@ -45,9 +45,10 @@ class CowSegmenter:
         
         with torch.no_grad():
             output = self.model(input_tensor)['out'][0]
-            
-        probs = torch.softmax(output, dim=0)
-        cow_prob = probs[self.cow_class_idx].cpu().numpy()
+            probs = torch.softmax(output, dim=0)
+            cow_prob = probs[self.cow_class_idx].cpu().numpy()
+            del input_tensor, output, probs
+
         binary_mask = (cow_prob > 0.4).astype(np.uint8) * 255
         
         if binary_mask.shape != (h, w):
