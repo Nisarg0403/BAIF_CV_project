@@ -10,7 +10,7 @@ from typing import Optional, List
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from starlette.staticfiles import StaticFiles
 from pydantic import BaseModel
 from pathlib import Path
 
@@ -27,7 +27,7 @@ app = FastAPI(
 )
 
 # Enable CORS for React frontend development
-app.add_middleware(
+app.add_middleware( 
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
@@ -186,6 +186,92 @@ async def predict_cattle_weight(
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/predict_video")
+async def predict_cattle_weight_video(
+    video_file: UploadFile = File(...),
+    cattle_id: str = Form("TAG-105730429112"),
+    model_engine: str = Form("deeplab")
+):
+    """
+    Innovation 1: Multi-frame Video Keyframe Selection Endpoint.
+    Accepts video input, extracts optimal keyframe, and delegates to existing inference logic.
+    Falls back to frame 0 on any exception.
+    """
+    fallback_warning = None
+    try:
+        video_bytes = await video_file.read()
+        if not video_bytes:
+            raise ValueError("Empty video file payload received.")
+
+        from src.features.video_keyframe_selector import select_best_keyframe
+        best_frame = select_best_keyframe(video_bytes, max_frames=90)
+        
+        # Encode numpy array frame to JPEG bytes
+        is_success, buffer = cv2.imencode(".jpg", best_frame)
+        if not is_success:
+            raise ValueError("Could not encode extracted keyframe to JPEG format.")
+        img_bytes = buffer.tobytes()
+
+    except Exception as e:
+        # Fallback handling: log exception and extract frame 0
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_dir = os.path.join(PROJECT_ROOT, "logs", "experimental")
+        os.makedirs(log_dir, exist_ok=True)
+        fallback_log = os.path.join(log_dir, f"fallback_predict_video_{timestamp_str}.log")
+        with open(fallback_log, "w", encoding="utf-8") as f_log:
+            f_log.write(f"Video keyframe selection failed: {e}\n")
+        
+        fallback_warning = "video_keyframe_fallback"
+        
+        # Extract frame 0 as fallback
+        try:
+            temp_vid = os.path.join(log_dir, f"temp_{timestamp_str}.mp4")
+            with open(temp_vid, "wb") as f_tmp:
+                f_tmp.write(video_bytes)
+            cap = cv2.VideoCapture(temp_vid)
+            ret, frame0 = cap.read()
+            cap.release()
+            if os.path.exists(temp_vid):
+                os.remove(temp_vid)
+            if ret and frame0 is not None:
+                _, buffer = cv2.imencode(".jpg", frame0)
+                img_bytes = buffer.tobytes()
+            else:
+                raise ValueError("Could not extract frame 0 fallback.")
+        except Exception as fb_err:
+            raise HTTPException(status_code=400, detail=f"Video processing & fallback failed: {fb_err}")
+
+    # Delegate to existing process_image_file logic
+    res = process_image_file(img_bytes, side_name="Left Side Profile", model_engine=model_engine)
+    b64_img = base64.b64encode(img_bytes).decode("utf-8")
+    data_url = f"data:image/jpeg;base64,{b64_img}"
+    pred_id = str(uuid.uuid4())[:8]
+
+    if fallback_warning:
+        res["warning"] = fallback_warning
+
+    log_entry = {
+        "id": pred_id,
+        "cattle_id": cattle_id,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
+        "engine": model_engine,
+        "weight": res["weight_kg"],
+        "confidence_pct": res["confidence_pct"],
+        "measurements": res["measurements"]
+    }
+    save_history_entry(log_entry)
+
+    return {
+        "success": True,
+        "id": pred_id,
+        "cattle_id": cattle_id,
+        "timestamp": log_entry["timestamp"],
+        "image_data_url": data_url,
+        "prediction": res,
+        "warning": fallback_warning
+    }
+
 
 @app.get("/api/history")
 def get_prediction_history():

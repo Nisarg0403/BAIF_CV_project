@@ -1,0 +1,9 @@
+# BAIF Experimental Software Innovation Feature Flags
+# Default state for ALL flags MUST be false (off)
+features:
+  ENABLE_VIDEO_KEYFRAME: false
+  ENABLE_PERSPECTIVE_UNWARP: false
+  ENABLE_DUAL_ANGLE: false
+  ENABLE_EXIF_CALIBRATION: false
+  ENABLE_KAN: false
+  ENABLE_XAI_CARDS: false
