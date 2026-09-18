@@ -9,7 +9,7 @@ import numpy as np
 
 def compute_cross_attention_weights(side_feats: np.ndarray, rear_feats: np.ndarray) -> np.ndarray:
     """
-    Computes cross-attention weights between side features Q and rear features K, V.
+    Computes per-feature cross-attention weights between side features Q and rear features K.
     side_feats: shape (D,) or (1, D)
     rear_feats: shape (D,) or (1, D)
     Returns normalized attention weights alpha of shape (1, D).
@@ -18,10 +18,11 @@ def compute_cross_attention_weights(side_feats: np.ndarray, rear_feats: np.ndarr
     k = np.atleast_2d(rear_feats)
     
     d_k = q.shape[1]
-    scores = np.dot(q, k.T) / math.sqrt(d_k)
+    # Channelwise cross-attention score
+    scores = (q * k) / math.sqrt(d_k)
     # Softmax normalization over feature dimension
-    exp_scores = np.exp(scores - np.max(scores))
-    weights = exp_scores / np.sum(exp_scores)
+    exp_scores = np.exp(scores - np.max(scores, axis=-1, keepdims=True))
+    weights = exp_scores / np.sum(exp_scores, axis=-1, keepdims=True)
     return weights
 
 def fuse_dual_angle_morphometrics(
@@ -56,8 +57,8 @@ def fuse_dual_angle_morphometrics(
 
     # 2. Cross-Attention
     attn_weights = compute_cross_attention_weights(f_side, f_rear)
-    # Fused feature vector: weighted sum of side and rear features
-    fused_vector = f_side + float(attn_weights[0, 0]) * f_rear
+    # Fused feature vector: side features + attention-weighted rear features
+    fused_vector = f_side + attn_weights[0] * f_rear
 
     # 3. 3D Volumetric Approximation (Ellipsoid Cylinder)
     # Semi-axes: a = side_height_cm / 2, b = rear_barrel_width_cm / 2
