@@ -163,8 +163,12 @@ def run_evaluation_for_configuration(config_name: str, target_flag: str = None, 
                             from backend.inference import get_deeplab_segmenter
                             segmenter = get_deeplab_segmenter()
                             rear_mask = segmenter.segment(small_back)
-                            fusion_module = DualAngleFusionModule()
-                            rear_w = fusion_module.extract_rear_barrel_width(rear_mask, calibration_factor=height/400.0)
+                            y_idx, _ = np.nonzero(rear_mask)
+                            if len(y_idx) > 0:
+                                rear_px_h = float(np.max(y_idx) - np.min(y_idx) + 1)
+                                cm_scale = height / rear_px_h if rear_px_h > 0 else 0.3
+                                fusion_module = DualAngleFusionModule()
+                                rear_w = fusion_module.extract_rear_barrel_width(rear_mask, calibration_factor=cm_scale)
                     except Exception:
                         pass
                 fused_res = fuse_dual_angle_morphometrics(
