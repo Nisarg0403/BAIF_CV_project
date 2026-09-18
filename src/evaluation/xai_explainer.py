@@ -85,9 +85,17 @@ def compute_shap_attributions(features: dict, base_weight: float = 350.0) -> dic
 def generate_xai_heatmap_overlay(image_bytes: bytes, mask: np.ndarray, shap_dict: dict) -> str:
     """
     Renders visual regional heatmap overlay over the cattle silhouette.
-    Highlights Ribcage (Chest Girth), Abdomen (Area), Withers (Height), and Rump (Length).
-    Returns Base64 encoded JPEG string.
+
+    Feature-to-Region Mapping:
+    --------------------------
+    1. 'chest_girth_cm'    -> Ribcage Region (Middle-front torso: y: 20-85% H, x: 30-65% W)
+    2. 'silhouette_area_cm2' -> Abdomen Region (Middle-lower torso: y: 35-100% H, x: 25-75% W)
+    3. 'withers_height_cm'  -> Withers Region (Top shoulder ridge: y: 0-40% H, x: 25-50% W)
+    4. 'body_length_cm'    -> Rump Region (Rear torso/flank: y: 15-75% H, x: 60-95% W)
+
+    Returns Base64 encoded JPEG image string.
     """
+
     file_bytes = np.asarray(bytearray(image_bytes), dtype=np.uint8)
     img = cv2.imdecode(file_bytes, 1)
     if img is None:
