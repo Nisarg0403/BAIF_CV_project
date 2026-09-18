@@ -41,6 +41,19 @@ export default function App() {
     rear: null
   });
 
+  // Experimental Innovations Panel State (Default OFF)
+  const [isInnovationsOpen, setIsInnovationsOpen] = useState(false);
+  const [enableVideo, setEnableVideo] = useState(false);
+  const [videoFile, setVideoFile] = useState(null);
+  const [enableUnwarp, setEnableUnwarp] = useState(false);
+  const [enableDualAngle, setEnableDualAngle] = useState(false);
+  const [dualSideFile, setDualSideFile] = useState(null);
+  const [dualRearFile, setDualRearFile] = useState(null);
+  const [enableExif, setEnableExif] = useState(false);
+  const [regressorEngine, setRegressorEngine] = useState('xgboost'); // 'xgboost', 'kan', 'ensemble'
+  const [ensembleAlpha, setEnsembleAlpha] = useState(0.5);
+  const [showXai, setShowXai] = useState(false);
+
   const [activeViewTab, setActiveViewTab] = useState('left'); // 'left', 'right', 'rear'
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -104,30 +117,80 @@ export default function App() {
   };
 
   const handleRunPrediction = async (customPhotos = null) => {
-    // Filter out React SyntheticEvent objects passed from button onClick handlers
-    const isPhotoObject = customPhotos && (customPhotos.left !== undefined || customPhotos.right !== undefined || customPhotos.rear !== undefined);
-    const targetPhotos = isPhotoObject ? customPhotos : photos;
-    
-    const hasPhoto = targetPhotos.left || targetPhotos.right || targetPhotos.rear;
-    if (!hasPhoto) {
-      setErrorMsg('Please upload or capture at least one profile photo (Left, Right, or Rear view).');
-      return;
-    }
-
     setLoading(true);
     setErrorMsg(null);
 
     try {
+      let endpoint = `${API_BASE}/api/predict`;
       const formData = new FormData();
-      if (targetPhotos.left?.file) formData.append('left_file', targetPhotos.left.file);
-      if (targetPhotos.right?.file) formData.append('right_file', targetPhotos.right.file);
-      if (targetPhotos.rear?.file) formData.append('rear_file', targetPhotos.rear.file);
-
       formData.append('cattle_id', cattleId);
       formData.append('model_engine', engine);
 
-      const res = await fetch(`${API_BASE}/api/predict`, {
+      const isPhotoObject = customPhotos && (customPhotos.left !== undefined || customPhotos.right !== undefined || customPhotos.rear !== undefined);
+      const targetPhotos = isPhotoObject ? customPhotos : photos;
+
+      if (enableVideo) {
+        if (!videoFile) {
+          throw new Error('Please select a video file (.mp4, .webm) for Innovation 1 Video Capture.');
+        }
+        endpoint = `${API_BASE}/api/predict_video`;
+        formData.append('video_file', videoFile);
+      } else if (enableDualAngle) {
+        const sideFileToUse = dualSideFile || targetPhotos.left?.file || targetPhotos.right?.file;
+        const rearFileToUse = dualRearFile || targetPhotos.rear?.file;
+        if (!sideFileToUse || !rearFileToUse) {
+          throw new Error('Dual-Angle capture requires both a side profile photo and a 45° rear view photo.');
+        }
+        endpoint = `${API_BASE}/api/predict_dual_angle`;
+        formData.append('side_file', sideFileToUse);
+        formData.append('rear_file', rearFileToUse);
+      } else if (regressorEngine === 'kan') {
+        const primaryFile = targetPhotos.left?.file || targetPhotos.right?.file || targetPhotos.rear?.file;
+        if (!primaryFile) {
+          throw new Error('Please upload or capture a profile photo to run KAN regression.');
+        }
+        endpoint = `${API_BASE}/api/predict_kan`;
+        formData.append('file', primaryFile);
+      } else if (regressorEngine === 'ensemble') {
+        const primaryFile = targetPhotos.left?.file || targetPhotos.right?.file || targetPhotos.rear?.file;
+        if (!primaryFile) {
+          throw new Error('Please upload or capture a profile photo to run Ensemble regression.');
+        }
+        endpoint = `${API_BASE}/api/predict_ensemble`;
+        formData.append('file', primaryFile);
+        formData.append('alpha', ensembleAlpha.toString());
+      } else {
+        // Baseline single/multi-view prediction flow
+        const hasPhoto = targetPhotos.left || targetPhotos.right || targetPhotos.rear;
+        if (!hasPhoto) {
+          throw new Error('Please upload or capture at least one profile photo (Left, Right, or Rear view).');
+        }
+        if (targetPhotos.left?.file) formData.append('left_file', targetPhotos.left.file);
+        if (targetPhotos.right?.file) formData.append('right_file', targetPhotos.right.file);
+        if (targetPhotos.rear?.file) formData.append('rear_file', targetPhotos.rear.file);
+      }
+
+      // Feature flag request headers
+      const headers = {};
+      if (enableUnwarp) headers['X-Enable-Unwarp'] = 'true';
+      if (enableExif) headers['X-Enable-EXIF'] = 'true';
+      if (showXai) headers['X-Enable-XAI'] = 'true';
+      if (regressorEngine === 'kan') headers['X-Enable-KAN'] = 'true';
+      if (enableVideo) headers['X-Enable-Video'] = 'true';
+      if (enableDualAngle) headers['X-Enable-Dual-Angle'] = 'true';
+
+      const flagsList = [];
+      if (enableVideo) flagsList.push('ENABLE_VIDEO_KEYFRAME=true');
+      if (enableUnwarp) flagsList.push('ENABLE_PERSPECTIVE_UNWARP=true');
+      if (enableDualAngle) flagsList.push('ENABLE_DUAL_ANGLE=true');
+      if (enableExif) flagsList.push('ENABLE_EXIF_CALIBRATION=true');
+      if (regressorEngine === 'kan') flagsList.push('ENABLE_KAN=true');
+      if (showXai) flagsList.push('ENABLE_XAI_CARDS=true');
+      if (flagsList.length > 0) headers['X-Feature-Flags'] = flagsList.join(',');
+
+      const res = await fetch(endpoint, {
         method: 'POST',
+        headers,
         body: formData
       });
 
@@ -156,13 +219,16 @@ export default function App() {
 
   const handleReset = () => {
     setPhotos({ left: null, right: null, rear: null });
+    setVideoFile(null);
+    setDualSideFile(null);
+    setDualRearFile(null);
     setPrediction(null);
     setPredictionsByView(null);
     setErrorMsg(null);
   };
 
   const activePhoto = photos[activeViewTab];
-  const isReady = photos.left || photos.right || photos.rear;
+  const isReady = photos.left || photos.right || photos.rear || (enableVideo && videoFile) || (enableDualAngle && (dualSideFile || photos.left) && (dualRearFile || photos.rear));
 
   return (
     <div className="app-container">
@@ -268,11 +334,184 @@ export default function App() {
           <main className="content-area">
             {/* Left 65% Workspace */}
             <section className="card-panel">
-              <div className="panel-header">
-                <div>
-                  <h2 className="panel-title">Predict Cattle Weight</h2>
-                  <p className="panel-subtitle">Upload multi-view profile photos of your cattle to calculate AI body weight & measurements.</p>
-                </div>
+              {/* Collapsible Panel: Experimental Innovations */}
+              <div style={{
+                marginBottom: '1.25rem',
+                border: '1px solid #CBD5E1',
+                borderRadius: '10px',
+                backgroundColor: '#F8FAFC',
+                overflow: 'hidden'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setIsInnovationsOpen(!isInnovationsOpen)}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem 1rem',
+                    backgroundColor: '#F1F5F9',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                    fontWeight: 700,
+                    fontSize: '0.9rem',
+                    color: 'var(--slate-dark)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Sparkles size={18} color="var(--primary-sage)" />
+                    <span>Experimental Innovations</span>
+                    <span style={{ fontSize: '0.72rem', backgroundColor: '#E2E8F0', padding: '0.15rem 0.4rem', borderRadius: '12px', fontWeight: 600, color: '#475569' }}>6 Modules</span>
+                  </div>
+                  <span>{isInnovationsOpen ? '▲ Hide' : '▼ Expand'}</span>
+                </button>
+
+                {isInnovationsOpen && (
+                  <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                    {/* 1. Innovation 1: Video Keyframe */}
+                    <div style={{ padding: '0.75rem', backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <label style={{ fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+                          <input 
+                            type="checkbox"
+                            checked={enableVideo}
+                            onChange={(e) => setEnableVideo(e.target.checked)}
+                          />
+                          <span>Use video capture (Innovation 1)</span>
+                        </label>
+                        <span title="Extracts optimal keyframe from uploaded cattle video sequence (.mp4, .webm)." style={{ cursor: 'help', fontSize: '0.8rem', color: '#64748B' }}>ℹ️ Info</span>
+                      </div>
+                      {enableVideo && (
+                        <div style={{ marginTop: '0.6rem' }}>
+                          <input 
+                            type="file"
+                            accept="video/mp4,video/webm,.mp4,.webm"
+                            onChange={(e) => setVideoFile(e.target.files[0])}
+                            style={{ fontSize: '0.8rem' }}
+                          />
+                          {videoFile && <span style={{ fontSize: '0.75rem', color: '#059669', marginLeft: '0.5rem', fontWeight: 600 }}>Selected: {videoFile.name}</span>}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 2. Innovation 2: Perspective Unwarp */}
+                    <div style={{ padding: '0.75rem', backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <label style={{ fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+                          <input 
+                            type="checkbox"
+                            checked={enableUnwarp}
+                            onChange={(e) => setEnableUnwarp(e.target.checked)}
+                          />
+                          <span>Enable perspective unwarping (Innovation 2)</span>
+                        </label>
+                        <span title="Applies 2D-to-3D keypoint transformation to correct pitch & yaw camera angle distortion." style={{ cursor: 'help', fontSize: '0.8rem', color: '#64748B' }}>ℹ️ Info</span>
+                      </div>
+                    </div>
+
+                    {/* 3. Innovation 3: Dual-Angle Capture */}
+                    <div style={{ padding: '0.75rem', backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <label style={{ fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+                          <input 
+                            type="checkbox"
+                            checked={enableDualAngle}
+                            onChange={(e) => setEnableDualAngle(e.target.checked)}
+                          />
+                          <span>Dual-angle capture (Innovation 3)</span>
+                        </label>
+                        <span title="Fuses side profile contour with 45° rear view barrel width via cross-attention." style={{ cursor: 'help', fontSize: '0.8rem', color: '#64748B' }}>ℹ️ Info</span>
+                      </div>
+                      {enableDualAngle && (
+                        <div style={{ marginTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          <div>
+                            <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>1. Side Profile Photo: </span>
+                            <input 
+                              type="file" 
+                              accept="image/*"
+                              onChange={(e) => setDualSideFile(e.target.files[0])}
+                              style={{ fontSize: '0.78rem' }}
+                            />
+                            {dualSideFile && <span style={{ fontSize: '0.72rem', color: '#059669', marginLeft: '0.4rem' }}>{dualSideFile.name}</span>}
+                          </div>
+                          <div>
+                            <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>2. 45° Rear View Photo: </span>
+                            <input 
+                              type="file" 
+                              accept="image/*"
+                              onChange={(e) => setDualRearFile(e.target.files[0])}
+                              style={{ fontSize: '0.78rem' }}
+                            />
+                            {dualRearFile && <span style={{ fontSize: '0.72rem', color: '#059669', marginLeft: '0.4rem' }}>{dualRearFile.name}</span>}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 4. Innovation 4: EXIF Calibration */}
+                    <div style={{ padding: '0.75rem', backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <label style={{ fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+                          <input 
+                            type="checkbox"
+                            checked={enableExif}
+                            onChange={(e) => setEnableExif(e.target.checked)}
+                          />
+                          <span>Enable EXIF self-calibration (Innovation 4)</span>
+                        </label>
+                        <span title="Calibrates pixel-to-cm scale using camera EXIF focal length metadata." style={{ cursor: 'help', fontSize: '0.8rem', color: '#64748B' }}>ℹ️ Info</span>
+                      </div>
+                    </div>
+
+                    {/* 5. Innovation 5: KAN / Ensemble */}
+                    <div style={{ padding: '0.75rem', backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>Regressor engine</span>
+                        <span title="Choose regression engine: XGBoost (baseline), PyTorch KAN (B-spline), or Ensemble." style={{ cursor: 'help', fontSize: '0.8rem', color: '#64748B' }}>ℹ️ Info</span>
+                      </div>
+                      <select
+                        value={regressorEngine}
+                        onChange={(e) => setRegressorEngine(e.target.value)}
+                        style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.82rem', fontWeight: 600 }}
+                      >
+                        <option value="xgboost">XGBoost (default, baseline)</option>
+                        <option value="kan">KAN (Innovation 5)</option>
+                        <option value="ensemble">Ensemble (α slider from 0.0 to 1.0)</option>
+                      </select>
+
+                      {regressorEngine === 'ensemble' && (
+                        <div style={{ marginTop: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>Alpha (α = XGB weight): {ensembleAlpha}</span>
+                          <input 
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.05"
+                            value={ensembleAlpha}
+                            onChange={(e) => setEnsembleAlpha(parseFloat(e.target.value))}
+                            style={{ flex: 1 }}
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 6. Innovation 6: XAI Cards */}
+                    <div style={{ padding: '0.75rem', backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <label style={{ fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+                          <input 
+                            type="checkbox"
+                            checked={showXai}
+                            onChange={(e) => setShowXai(e.target.checked)}
+                          />
+                          <span>Show XAI heatmap (Innovation 6)</span>
+                        </label>
+                        <span title="Renders SHAP feature attribution heatmap overlay and model proof validation cards." style={{ cursor: 'help', fontSize: '0.8rem', color: '#64748B' }}>ℹ️ Info</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Tag Input */}
@@ -534,8 +773,35 @@ export default function App() {
                     </div>
                     <div className="metric-hero-lbl">Estimated Weight</div>
                     <div className="metric-hero-val">{prediction.weight_kg} kg</div>
-                    <div className="metric-hero-sub">(± 17.2 kg MAE)</div>
+                    <div className="metric-hero-sub">
+                      Engine: {regressorEngine === 'kan' ? 'KAN (Innovation 5)' : regressorEngine === 'ensemble' ? `Ensemble (α=${ensembleAlpha})` : 'XGBoost (Baseline)'}
+                    </div>
                   </div>
+
+                  {/* Innovation 1: Video Keyframe Thumbnail indicator */}
+                  {enableVideo && (
+                    <div style={{ padding: '0.5rem 0.75rem', backgroundColor: '#ECFDF5', border: '1px solid #10B981', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.8rem', color: '#065F46', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span>🎬 Keyframe selected from video capture (Innovation 1)</span>
+                    </div>
+                  )}
+
+                  {/* Innovation 3: Dual-Angle Schaeffer Volumetric Estimate Note */}
+                  {(enableDualAngle || prediction.dual_angle_fusion) && (
+                    <div style={{ padding: '0.55rem 0.75rem', backgroundColor: '#E0F2FE', border: '1px solid #0284C7', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.8rem', color: '#0369A1', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span>📐 Dual-angle Schaeffer volumetric estimate</span>
+                    </div>
+                  )}
+
+                  {/* Innovation 4: EXIF Scale Discrepancy Warning Badge */}
+                  {prediction.exif_calibration?.flagged && (
+                    <div style={{ padding: '0.65rem 0.85rem', backgroundColor: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.8rem', color: '#92400E', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <AlertCircle size={18} color="#D97706" />
+                      <div>
+                        <div>⚠️ EXIF Discrepancy &gt;10% Warning</div>
+                        <div style={{ fontSize: '0.74rem', fontWeight: 500 }}>{prediction.exif_calibration.warning || 'Focal length scale mismatch detected.'}</div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Confidence Meter */}
                   <div className="confidence-wrapper">
@@ -576,6 +842,24 @@ export default function App() {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Innovation 6: Collapsible XAI Heatmap Card */}
+                  {prediction.xai_heatmap_b64 && (
+                    <div style={{ marginBottom: '1.25rem', padding: '1rem', backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                      <h4 style={{ fontSize: '0.92rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--slate-dark)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <Sparkles size={16} color="var(--primary-sage)" />
+                        <span>🔥 XAI SHAP Heatmap (Innovation 6)</span>
+                      </h4>
+                      <img 
+                        src={`data:image/png;base64,${prediction.xai_heatmap_b64}`} 
+                        alt="XAI Feature Attribution Overlay"
+                        style={{ width: '100%', borderRadius: '8px', border: '1px solid #CBD5E1', marginBottom: '0.4rem' }}
+                      />
+                      <p style={{ fontSize: '0.75rem', color: '#64748B', lineHeight: '1.4' }}>
+                        <b>SHAP Region Mapping:</b> Ribcage (Chest Girth), Abdomen (Torso Volume), Withers (Height), Rump (Length).
+                      </p>
+                    </div>
+                  )}
                 </>
               ) : (
                 /* Empty prediction state until user runs prediction */

@@ -648,6 +648,25 @@ def render_estimator(segmenter, model, multimodel_pack=None):
         return
         
     # Cattle ID tag number text input
+    with st.expander("🧪 Experimental Innovations (6 Modules)", expanded=False):
+        st.markdown("**Test backend innovations via per-request controls:**")
+        exp_v = st.checkbox("Use video capture (Innovation 1)", value=False, help="Extracts optimal keyframe from uploaded video file (.mp4, .webm)")
+        if exp_v:
+            st.file_uploader("Upload Cattle Video (.mp4, .webm)", type=["mp4", "webm"], key="exp_video_file")
+            
+        exp_u = st.checkbox("Enable perspective unwarping (Innovation 2)", value=False, help="Applies 2D-to-3D keypoint transformation to correct pitch & yaw camera angle distortion.")
+        exp_da = st.checkbox("Dual-angle capture (Innovation 3)", value=False, help="Fuses side profile contour with 45° rear view barrel width via cross-attention.")
+        if exp_da:
+            st.file_uploader("Side Profile Image", type=["jpg", "jpeg", "png"], key="exp_dual_side")
+            st.file_uploader("45° Rear View Image", type=["jpg", "jpeg", "png"], key="exp_dual_rear")
+            
+        exp_exif = st.checkbox("Enable EXIF self-calibration (Innovation 4)", value=False, help="Calibrates pixel-to-cm scale using camera EXIF focal length metadata.")
+        exp_engine = st.selectbox("Regressor engine", ["XGBoost (default, baseline)", "KAN (Innovation 5)", "Ensemble (α slider from 0.0 to 1.0)"], help="Choose regression engine: XGBoost (baseline), PyTorch KAN (B-spline), or Ensemble.")
+        if "Ensemble" in exp_engine:
+            st.slider("Alpha (α = XGB weight)", 0.0, 1.0, 0.5, 0.05, key="exp_alpha")
+            
+        exp_xai = st.checkbox("Show XAI heatmap (Innovation 6)", value=False, help="Renders SHAP feature attribution overlay and model proof validation cards.")
+
     st.session_state.cattle_id = st.text_input(
         "🏷️ Enter Cattle Tag ID Number", 
         value=st.session_state.cattle_id, 
