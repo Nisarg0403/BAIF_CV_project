@@ -253,6 +253,30 @@ def process_image_file(image_bytes, side_name="Left Side Profile", model_engine=
     except Exception:
         pass
 
+    # Optional Innovation 6: XAI Visual Cards & Heatmap (Default OFF)
+    xai_explanation = None
+    try:
+        import yaml
+        config_path = os.path.join(PROJECT_ROOT, "configs", "features.yaml")
+        enable_xai = False
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f_cfg:
+                cfg_data = yaml.safe_load(f_cfg)
+                enable_xai = cfg_data.get("features", {}).get("ENABLE_XAI_CARDS", False)
+
+        if enable_xai:
+            from src.evaluation.xai_explainer import XAIExplainer
+            explainer = XAIExplainer()
+            meas_dict = {
+                "body_length_cm": cv_length_cm,
+                "chest_girth_cm": cv_girth_cm,
+                "silhouette_area_cm2": cv_area_cm2,
+                "withers_height_cm": cv_withers_height_cm
+            }
+            xai_explanation = explainer.explain_and_render(image_bytes, mask, meas_dict)
+    except Exception:
+        pass
+
     result_dict = {
         "engine": model_engine.lower(),
         "weight_kg": round(primary_weight, 1),
@@ -274,5 +298,9 @@ def process_image_file(image_bytes, side_name="Left Side Profile", model_engine=
     }
     if exif_calibration is not None:
         result_dict["exif_calibration"] = exif_calibration
+    if xai_explanation is not None:
+        result_dict["xai_explanation"] = xai_explanation
+        result_dict["xai_heatmap_b64"] = xai_explanation.get("xai_heatmap_b64", "")
     return result_dict
+
 

@@ -78,3 +78,38 @@ def test_xai_flag_defaults_to_false():
 
     assert cfg.get("features", {}).get("ENABLE_XAI_CARDS") is False, \
         "ENABLE_XAI_CARDS flag must default to false."
+
+def test_xai_cards_integration_with_flag():
+    from backend.inference import process_image_file
+
+    img_path = os.path.join(os.path.dirname(__file__), "..", "data", "processed", "uploaded_images", "be39ef2e_105730429112_LL_1.jpg")
+    if not os.path.exists(img_path):
+        pytest.skip("Test image not found.")
+
+    with open(img_path, "rb") as f:
+        img_bytes = f.read()
+
+    # With flag OFF (default baseline)
+    res_off = process_image_file(img_bytes, side_name="Left Side Profile", model_engine="deeplab")
+    assert "xai_heatmap_b64" not in res_off
+
+    # Mock flag ON
+    config_path = os.path.join(os.path.dirname(__file__), "..", "configs", "features.yaml")
+    with open(config_path, "r") as f:
+        cfg = yaml.safe_load(f)
+
+    cfg["features"]["ENABLE_XAI_CARDS"] = True
+    with open(config_path, "w") as f:
+        yaml.safe_dump(cfg, f)
+
+    try:
+        res_on = process_image_file(img_bytes, side_name="Left Side Profile", model_engine="deeplab")
+        assert "xai_heatmap_b64" in res_on
+        assert "xai_explanation" in res_on
+        assert res_on["xai_heatmap_b64"].startswith("data:image/jpeg;base64,")
+    finally:
+        # Revert flag back to False (default)
+        cfg["features"]["ENABLE_XAI_CARDS"] = False
+        with open(config_path, "w") as f:
+            yaml.safe_dump(cfg, f)
+
