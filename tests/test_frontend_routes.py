@@ -9,6 +9,10 @@ from backend.main import app
 client = TestClient(app)
 
 def create_dummy_jpeg():
+    sample_path = os.path.join("data", "BAIF_IMAGES", "105730429112", "105730429112_LL_1.jpg")
+    if os.path.exists(sample_path):
+        with open(sample_path, "rb") as f:
+            return f.read()
     img = np.zeros((300, 300, 3), dtype=np.uint8)
     cv2.rectangle(img, (50, 50), (250, 250), (255, 255, 255), -1)
     _, buf = cv2.imencode(".jpg", img)

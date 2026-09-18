@@ -70,8 +70,8 @@ def fuse_dual_angle_morphometrics(
     fused_vector = f_side + attn_weights[0] * f_rear
 
     # 3. 3D Volumetric Approximation (Ellipsoid Cylinder)
-    # Semi-axes: a = side_height_cm / 2, b = rear_barrel_width_cm / 2
-    a = side_height_cm / 2.0
+    # Semi-axes: a = torso vertical radius (side_height_cm * 0.25), b = rear_barrel_width_cm / 2.0
+    a = side_height_cm * 0.25
     b = rear_barrel_width_cm / 2.0
     L = side_length_cm
 

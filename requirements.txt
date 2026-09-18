@@ -20,5 +20,6 @@ streamlit>=1.20.0
 fastapi>=0.75.0
 uvicorn>=0.17.0
 python-multipart>=0.0.5
-
+pytest>=8.2.1 
+shap
 
