@@ -6,6 +6,7 @@ import base64
 import numpy as np
 from datetime import datetime
 from typing import Optional, List
+import cv2
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
@@ -271,6 +272,122 @@ async def predict_cattle_weight_video(
         "prediction": res,
         "warning": fallback_warning
     }
+
+@app.post("/api/predict_kan")
+async def predict_cattle_weight_kan(
+    file: UploadFile = File(None),
+    cattle_id: str = Form("TAG-105730429112"),
+    model_engine: str = Form("deeplab")
+):
+    """
+    Innovation 5: Isolated PyTorch B-spline KAN Regressor Endpoint.
+    Falls back to XGBoost baseline with warning on any failure.
+    """
+    fallback_warning = None
+    try:
+        if not file:
+            raise ValueError("No file uploaded.")
+        img_bytes = await file.read()
+        res = process_image_file(img_bytes, side_name="Left Side Profile", model_engine=model_engine)
+        
+        m = res["measurements"]
+        X_feat = np.array([[m["body_length_cm"], m["chest_girth_cm"], m["silhouette_area_cm2"], m["withers_height_cm"]]])
+        
+        from src.models.kan_regressor import KANRegressor
+        kan_reg = KANRegressor(in_features=4)
+        kan_weight = float(kan_reg.predict(X_feat)[0])
+        
+        res["weight_kg"] = round(kan_weight, 1)
+        res["model_predictions"]["PyTorch KAN Regressor"] = round(kan_weight, 1)
+
+    except Exception as e:
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_dir = os.path.join(PROJECT_ROOT, "logs", "experimental")
+        os.makedirs(log_dir, exist_ok=True)
+        fallback_log = os.path.join(log_dir, f"fallback_predict_kan_{timestamp_str}.log")
+        with open(fallback_log, "w", encoding="utf-8") as f_log:
+            f_log.write(f"KAN prediction failed: {e}\n")
+        
+        fallback_warning = "kan_fallback"
+        # Fallback to existing process_image_file
+        if file:
+            await file.seek(0)
+            img_bytes = await file.read()
+            res = process_image_file(img_bytes, side_name="Left Side Profile", model_engine=model_engine)
+        res["warning"] = fallback_warning
+
+    b64_img = base64.b64encode(img_bytes).decode("utf-8")
+    data_url = f"data:image/jpeg;base64,{b64_img}"
+    pred_id = str(uuid.uuid4())[:8]
+
+    return {
+        "success": True,
+        "id": pred_id,
+        "cattle_id": cattle_id,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
+        "image_data_url": data_url,
+        "prediction": res,
+        "warning": fallback_warning
+    }
+
+@app.post("/api/predict_ensemble")
+async def predict_cattle_weight_ensemble(
+    file: UploadFile = File(None),
+    cattle_id: str = Form("TAG-105730429112"),
+    model_engine: str = Form("deeplab"),
+    alpha: float = Form(1.0)
+):
+    """
+    Innovation 5: Weighted XGBoost + KAN Ensemble Endpoint (final_weight = alpha * XGB + (1-alpha) * KAN).
+    Default alpha = 1.0 preserves pure XGBoost baseline. Falls back to pure XGBoost on failure.
+    """
+    fallback_warning = None
+    try:
+        if not file:
+            raise ValueError("No file uploaded.")
+        img_bytes = await file.read()
+        res = process_image_file(img_bytes, side_name="Left Side Profile", model_engine=model_engine)
+        
+        xgb_weight = res["weight_kg"]
+        m = res["measurements"]
+        X_feat = np.array([[m["body_length_cm"], m["chest_girth_cm"], m["silhouette_area_cm2"], m["withers_height_cm"]]])
+        
+        from src.models.kan_regressor import KANRegressor
+        kan_reg = KANRegressor(in_features=4)
+        ensemble_wt = kan_reg.ensemble_predict(xgb_weight, X_feat, alpha=alpha)
+        
+        res["weight_kg"] = round(ensemble_wt, 1)
+        res["model_predictions"][f"Ensemble (alpha={alpha})"] = round(ensemble_wt, 1)
+
+    except Exception as e:
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_dir = os.path.join(PROJECT_ROOT, "logs", "experimental")
+        os.makedirs(log_dir, exist_ok=True)
+        fallback_log = os.path.join(log_dir, f"fallback_predict_ensemble_{timestamp_str}.log")
+        with open(fallback_log, "w", encoding="utf-8") as f_log:
+            f_log.write(f"Ensemble prediction failed: {e}\n")
+        
+        fallback_warning = "ensemble_fallback"
+        if file:
+            await file.seek(0)
+            img_bytes = await file.read()
+            res = process_image_file(img_bytes, side_name="Left Side Profile", model_engine=model_engine)
+        res["warning"] = fallback_warning
+
+    b64_img = base64.b64encode(img_bytes).decode("utf-8")
+    data_url = f"data:image/jpeg;base64,{b64_img}"
+    pred_id = str(uuid.uuid4())[:8]
+
+    return {
+        "success": True,
+        "id": pred_id,
+        "cattle_id": cattle_id,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
+        "image_data_url": data_url,
+        "prediction": res,
+        "warning": fallback_warning
+    }
+
 
 
 @app.get("/api/history")
