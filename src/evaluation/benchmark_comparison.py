@@ -21,8 +21,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.inference import process_image_file, get_effective_feature_flags
-from src.models.kan_regressor import KANRegressor
+from backend.inference import process_image_file, get_effective_feature_flags, get_multimodel_pack
+from src.models.kan_regressor import get_kan_regressor
 from src.models.dual_angle_fusion import fuse_dual_angle_morphometrics, DualAngleFusionModule
 from src.features.video_keyframe_selector import select_best_keyframe_from_frames
 from src.features.exif_scale_calibrator import cross_validate_exif_scale
@@ -115,7 +115,9 @@ def run_evaluation_for_configuration(config_name: str, target_flag: str = None, 
     n_successful = 0
     n_fallbacks = 0
 
-    kan_model = KANRegressor() if target_flag == "ENABLE_KAN" else None
+    multimodel_pack = get_multimodel_pack()
+    weight_model = multimodel_pack['weight_models']['Gradient Boosting Regressor'] if multimodel_pack else None
+    kan_model = get_kan_regressor() if target_flag == "ENABLE_KAN" else None
 
     total_start_wall = time.perf_counter()
 

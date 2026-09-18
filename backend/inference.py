@@ -11,12 +11,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.segmentation.segment import CowSegmenter
-try:
-    from src.segmentation.segment import YOLOv8Segmenter
-except ImportError:
-    YOLOv8Segmenter = None
-
 from src.features.morphometry import extract_morphometric_features
 from src.features.landmarks import detect_anatomical_landmarks, draw_landmark_overlay
 
@@ -67,6 +61,7 @@ def get_deeplab_segmenter():
         gc.collect()
 
     if _DEEPLAB_SEGMENTER is None:
+        from src.segmentation.segment import CowSegmenter
         _DEEPLAB_SEGMENTER = CowSegmenter()
     return _DEEPLAB_SEGMENTER
 
@@ -78,13 +73,15 @@ def get_yolo_segmenter():
         gc.collect()
 
     if _YOLO_SEGMENTER is None:
-        if YOLOv8Segmenter is not None:
-            try:
+        try:
+            from src.segmentation.segment import YOLOv8Segmenter, CowSegmenter
+            if YOLOv8Segmenter is not None:
                 _YOLO_SEGMENTER = YOLOv8Segmenter()
-            except Exception as e:
-                print(f"Warning initializing YOLOv8: {e}")
+            else:
                 _YOLO_SEGMENTER = CowSegmenter()
-        else:
+        except Exception as e:
+            print(f"Warning initializing YOLOv8: {e}")
+            from src.segmentation.segment import CowSegmenter
             _YOLO_SEGMENTER = CowSegmenter()
     return _YOLO_SEGMENTER
 

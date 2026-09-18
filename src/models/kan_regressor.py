@@ -23,6 +23,14 @@ os.makedirs(SPLIT_DIR, exist_ok=True)
 SPLIT_PATH = os.path.join(SPLIT_DIR, "baif_train_test_split.json")
 
 
+_KAN_SINGLETON = None
+
+def get_kan_regressor(in_features: int = 4):
+    global _KAN_SINGLETON
+    if _KAN_SINGLETON is None:
+        _KAN_SINGLETON = KANRegressor(in_features=in_features)
+    return _KAN_SINGLETON
+
 def b_spline_basis(x: np.ndarray, degree: int = 3) -> np.ndarray:
     """
     Computes B-Spline Basis Polynomial Expansion [x, x^2, x^3, SiLU(x), SiLU(x)^2].
