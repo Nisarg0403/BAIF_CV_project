@@ -62,7 +62,7 @@ All six experimental software innovations are modularly isolated and toggled via
 
 ## 💡 How to Enable Each Innovation
 
-To enable any innovation, edit `configs/features.yaml` or set flag state programmatically:
+To enable any innovation globally, edit `configs/features.yaml` or set flag state programmatically:
 
 ```yaml
 features:
@@ -74,7 +74,50 @@ features:
   ENABLE_XAI_CARDS: false
 ```
 
-Restart the FastAPI backend service (`python backend/main.py`) after modifying flags.
+---
+
+## 📱 Using the Innovations from the UI
+
+All six software innovations can be interactively tested directly from the hosted React web app (`/`) or Streamlit dashboard (`web/app.py`) via the **"Experimental Innovations"** collapsible panel at the top of the prediction form. Per-request feature flag overrides (`X-Feature-Flags` / `X-Enable-*`) enable dynamic testing without restarting the server or persisting YAML edits.
+
+### 1. Innovation 1: Multi-Frame Video Keyframe Selector
+- **Toggle to enable**: Check `"Use video capture (Innovation 1)"`
+- **Input to provide**: Cattle video recording file (`.mp4`, `.webm`)
+- **Expected output**: Extracted sharp keyframe thumbnail badge on the result card, routed via `POST /api/predict_video`.
+- **Known limitation**: Sharpness filtering selects the clearest static frame; severely blurred videos fall back to frame 0.
+
+### 2. Innovation 2: 2D-to-3D Keypoint Perspective Unwarper
+- **Toggle to enable**: Check `"Enable perspective unwarping (Innovation 2)"`
+- **Input to provide**: Cattle profile photo. Sends per-request header `X-Enable-Unwarp: true`.
+- **Expected output**: Perspective-corrected silhouette contour and unwarped morphometric measurements.
+- **Known limitation**: Heuristic keypoints experience drift on photos rotated >15° (41 px drift at 15°, 79 px at 30°).
+
+### 3. Innovation 3: Dual-Angle Guided Capture Fusion
+- **Toggle to enable**: Check `"Dual-angle capture (Innovation 3)"`
+- **Input to provide**: TWO image uploads — (1) Side Profile image and (2) 45° Rear View image.
+- **Expected output**: Fused girth and Schaeffer weight estimate, accompanied by note `"Dual-angle Schaeffer volumetric estimate"`, routed via `POST /api/predict_dual_angle`.
+- **Known limitation**: Uses 3D Schaeffer volumetric fitting \(W = \frac{G_{\text{fused}}^2 \times L}{10838.0}\); cross-attention weights \(\boldsymbol{\alpha}\) are returned for explainability.
+
+### 4. Innovation 4: Zero-Marker EXIF Self-Calibration
+- **Toggle to enable**: Check `"Enable EXIF self-calibration (Innovation 4)"`
+- **Input to provide**: Cattle photo containing EXIF metadata (focal length, camera sensor dimensions).
+- **Expected output**: Scale calibration check. If EXIF/withers scale discrepancy exceeds 10%, displays warning badge `⚠️ EXIF Discrepancy >10% Warning` on the result card.
+- **Known limitation**: Images stripped of EXIF tags by web compression fall back to default distance-calibrated pixel scale.
+
+### 5. Innovation 5: Kolmogorov-Arnold Regressor (KAN) & Ensemble
+- **Dropdown selector**: Select `"Regressor engine"` option:
+  - `XGBoost (default, baseline)` (routes to `POST /api/predict`)
+  - `KAN (Innovation 5)` (routes to `POST /api/predict_kan`)
+  - `Ensemble (α slider from 0.0 to 1.0)` (routes to `POST /api/predict_ensemble`)
+- **Input to provide**: Profile photo + optional Alpha slider (\(\alpha\) from 0.0 to 1.0) for Ensemble weighting.
+- **Expected output**: Selected engine label displayed on the result card (e.g. `Engine: KAN (Innovation 5)` or `Engine: Ensemble (α=0.50)`).
+- **Known limitation**: KAN evaluates B-spline univariate functions; XGBoost remains recommended baseline for official field accuracy.
+
+### 6. Innovation 6: Real-Time Quality + XAI Heatmap Cards
+- **Toggle to enable**: Check `"Show XAI heatmap (Innovation 6)"`
+- **Input to provide**: Cattle profile photo. Sends per-request header `X-Enable-XAI: true`.
+- **Expected output**: Renders a new collapsible card below the weight card displaying the SHAP feature attribution heatmap overlay (`xai_heatmap_b64`) mapping features to Ribcage, Abdomen, Withers, and Rump regions, alongside N=15 validation proofs.
+- **Known limitation**: SHAP background summary adds ~50-100ms inference overhead.
 
 ---
 
