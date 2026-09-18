@@ -232,7 +232,28 @@ def process_image_file(image_bytes, side_name="Left Side Profile", model_engine=
             if isinstance(v, (tuple, list)) and len(v) == 2:
                 formatted_landmarks[k] = {"x": int(v[0]), "y": int(v[1])}
 
-    return {
+    # Optional Innovation 4: Zero-Marker EXIF Calibration (Default OFF)
+    exif_calibration = None
+    try:
+        import yaml
+        config_path = os.path.join(PROJECT_ROOT, "configs", "features.yaml")
+        enable_exif = False
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f_cfg:
+                cfg_data = yaml.safe_load(f_cfg)
+                enable_exif = cfg_data.get("features", {}).get("ENABLE_EXIF_CALIBRATION", False)
+        
+        if enable_exif:
+            from src.features.exif_scale_calibrator import EXIFScaleCalibrator
+            withers_scale_cm_px = float(cv_withers_height_cm / raw_height) if raw_height > 0 else 0.3
+            calibrator = EXIFScaleCalibrator(estimated_distance_cm=225.0, threshold_pct=10.0)
+            exif_calibration = calibrator.calibrate(image_bytes, (h, w), withers_scale_cm_px)
+            if exif_calibration.get("flagged") and not warning:
+                warning = exif_calibration.get("warning")
+    except Exception:
+        pass
+
+    result_dict = {
         "engine": model_engine.lower(),
         "weight_kg": round(primary_weight, 1),
         "confidence_pct": round(confidence_score, 1),
@@ -251,3 +272,7 @@ def process_image_file(image_bytes, side_name="Left Side Profile", model_engine=
         "warning": warning,
         "image_dims": {"width": w, "height": h}
     }
+    if exif_calibration is not None:
+        result_dict["exif_calibration"] = exif_calibration
+    return result_dict
+
