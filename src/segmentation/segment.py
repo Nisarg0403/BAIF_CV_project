@@ -18,11 +18,9 @@ class CowSegmenter:
     DeepLabV3-ResNet50 Segmentation Engine (Precision Validated: ±4.93 kg MAE)
     """
     def __init__(self, device=None):
-        torch.set_num_threads(2)
-        if device is None:
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        else:
-            self.device = device
+        torch.set_num_threads(1)
+        torch.set_grad_enabled(False)
+        self.device = torch.device('cpu')
             
         print(f"Initializing DeepLabV3 Cow Segmenter on device: {self.device}")
         weights = DeepLabV3_ResNet50_Weights.DEFAULT
@@ -110,7 +108,7 @@ class YOLOv8Segmenter:
             return self._get_fallback().segment(image)
 
         try:
-            results = self.model(image, conf=0.15, verbose=False)[0]
+            results = self.model(image, conf=0.15, verbose=False, device='cpu')[0]
         except Exception as e:
             print(f"YOLOv8 inference error: {e}. Using DeepLabV3 fallback.")
             return self._get_fallback().segment(image)
