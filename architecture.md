@@ -1,7 +1,7 @@
 # 🏗️ End-to-End System Architecture (`architecture.md`)
 **Project:** BAIF AI-Based Cattle Weight & Morphometry Estimation System  
 **Version:** 3.0 (SOTA Pure Smartphone Zero-Hardware Architecture)  
-**Date:** September 18, 2026  
+**Date:** September 19, 2026  
 
 ---
 
@@ -28,9 +28,16 @@ flowchart TD
 
     %% Ingestion & Preprocessing API
     subgraph S2["🚀 API Gateway & Preprocessing Layer (FastAPI Backend)"]
-        Optimal_Frame --> API["FastAPI Endpoint /predict"]
-        API --> EXIF["EXIF Metadata Extractor\n(FocalLength, SensorWidth, Resolution)"]
-        API --> Preproc["Image Normalization & Resizing"]
+        Optimal_Frame --> API["FastAPI Gateway (/api/predict)"]
+        
+        %% Innovation 1 Branch
+        API -. "ENABLE_VIDEO_KEYFRAME [Optional]" .-> Video_Keyframe["Video Keyframe Selector\n(src/features/video_keyframe_selector.py)"]
+        Video_Keyframe --> Preproc["Image Normalization & Resizing"]
+        API --> Preproc
+
+        %% Innovation 4 Branch
+        Preproc -. "ENABLE_EXIF_CALIBRATION [Optional]" .-> EXIF_Calib["Zero-Marker EXIF Self-Calibrator\n(src/features/exif_scale_calibrator.py)"]
+        EXIF_Calib --> Scale_Validation["Focal Scale Cross-Validation\n(Flags >10% Discrepancy)"]
     end
 
     %% AI Segmentation & Keypoint Engine
@@ -50,32 +57,43 @@ flowchart TD
         Mask_Fusion --> Morph_Ext["2D Morphometry Extractor\n(Pixel Length, Withers Height, Silhouette Area)"]
         Land_Pts --> Yaw_Pitch["3D Camera Angle Estimator\n(Yaw theta, Pitch phi)"]
         
-        Yaw_Pitch --> Unwarp["Affine Perspective Unwarper\n(Restores 90° Orthogonal Profile)"]
+        %% Innovation 2 Branch
+        Yaw_Pitch -. "ENABLE_PERSPECTIVE_UNWARP [Optional/Deferred]" .-> Unwarp["Affine Perspective Unwarper\n(src/features/perspective_unwarper.py)"]
         Unwarp --> Morph_Corr["Corrected Morphometry\n(Orthogonal Length L_cm, Area A_cm2)"]
+        Morph_Ext --> Morph_Corr
         
-        EXIF --> Scale_Engine["Self-Calibrating Scale Engine\n(cm/px = Withers_Height_cm / Mask_Height_px)"]
-        Scale_Engine --> Morph_Corr
+        Scale_Validation --> Morph_Corr
     end
 
     %% Multi-Model Weight Regression
     subgraph S5["🤖 Regressor Engine & Volumetric Fitting"]
         Morph_Corr --> Feature_Vector["Extracted Feature Vector:\n[L_cm, Withers_H_cm, Area_cm2, Aspect_Ratio, Scale_Factor]"]
         
-        Feature_Vector --> XGB["XGBoost Regressor\n(Primary Field Model)"]
-        Feature_Vector --> KAN["Kolmogorov-Arnold Network\n(KAN Volumetric Regressor: W ~ G^2 * L)"]
-        Feature_Vector --> Schaeffer["Schaeffer Volumetric Formula\n(Baseline Benchmark)"]
+        Feature_Vector --> XGB["XGBoost Regressor\n(Primary Field Model: 20.59 kg MAE)"]
         
-        XGB --> Ensemble["Weighted Model Ensemble"]
+        %% Innovation 5 Branch
+        Feature_Vector -. "ENABLE_KAN [Optional]" .-> KAN["Kolmogorov-Arnold Network\n(src/models/kan_regressor.py)"]
+        
+        %% Innovation 3 Branch
+        Feature_Vector -. "ENABLE_DUAL_ANGLE [Optional]" .-> Dual_Angle["Dual-Angle Cross-Attention Fusion\n(src/models/dual_angle_fusion.py)"]
+        Dual_Angle --> Ramanujan["3D Ellipsoid Ramanujan Girth G_fused"]
+        Ramanujan --> Schaeffer["Schaeffer Volumetric Formula: W = G^2 * L / 10838"]
+
+        XGB --> Ensemble["Weighted Model Ensemble / Final Prediction"]
         KAN --> Ensemble
+        Schaeffer --> Ensemble
     end
 
     %% Explainable AI & Client Presentation
     subgraph S6["📊 Explainable AI (XAI) & Client Dashboard"]
         Ensemble --> Weight_Est["Final Estimated Weight (kg)\n(±2.5% Target Error)"]
-        Mask_Fusion --> XAI["XAI Explainability Engine\n(LIME / SHAP Region Heatmap)"]
+        
+        %% Innovation 6 Branch
+        Ensemble -. "ENABLE_XAI_CARDS [Optional]" .-> XAI["XAI Explainability Engine\n(src/evaluation/xai_explainer.py)"]
+        XAI --> Heatmap_Overlay["JET Visual Saliency Overlay (xai_heatmap_b64)\n(Ribcage, Abdomen, Withers, Rump)"]
         
         Weight_Est --> React_UI["React / Streamlit User Dashboard"]
-        XAI --> React_UI
+        Heatmap_Overlay --> React_UI
         Morph_Corr --> React_UI
         
         React_UI --> Card1["Weight & Error Margin Card\n(Predicted: 584 kg ±15 kg)"]
@@ -99,7 +117,8 @@ flowchart TD
 
 ### Layer 2: API Gateway & Data Ingestion (`FastAPI Backend`)
 - **Endpoint `/api/v1/predict`**: Receives RGB image binary payload + EXIF headers.
-- **EXIF Extractor**: Parses camera focal length ($f$), sensor width, and pixel dimensions for camera calibration.
+- **Innovation 1 (`ENABLE_VIDEO_KEYFRAME`)**: `POST /api/predict_video` extracts optimal frame from video stream.
+- **Innovation 4 (`ENABLE_EXIF_CALIBRATION`)**: Zero-marker EXIF self-calibrator parses camera focal length ($f_{\text{mm}}$) and sensor dimensions, cross-validating against withers scale factor with a $10\%$ discrepancy threshold.
 
 ### Layer 3: Dual Segmentation & Keypoint Pipeline (`PyTorch / ONNX`)
 - **DeepLabV3+-ResNet50**: Performs pixel-level semantic classification for torso silhouette extraction (MAE ±4.93 kg standalone proof).
@@ -107,27 +126,28 @@ flowchart TD
 - **2D Animal Keypoint Detector**: Identifies 8 key anatomical landmarks (*Withers, Hook/Hip, Pin Bone, Shoulder, Knee, Stifle, Muzzle, Hoof*).
 
 ### Layer 4: Geometry Correction & Scale Engine (`Morphometry Core`)
-- **Perspective Unwarper**: Estimates 3D camera yaw/pitch angles ($\theta_{\text{yaw}}, \phi_{\text{pitch}}$) from landmark spatial ratios and applies affine unwarping to correct angled photos.
+- **Innovation 2 (`ENABLE_PERSPECTIVE_UNWARP`)**: Affine perspective unwarper estimates 3D camera yaw/pitch angles ($\theta_{\text{yaw}}, \phi_{\text{pitch}}$) from landmark ratios and restores 90° orthogonal profile.
 - **Self-Calibrating Scale Engine**: Converts pixel metrics to physical centimeters ($\text{cm/px} = \frac{\text{Withers Height (cm)}}{\text{Mask Height (px)}}$).
 
 ### Layer 5: Multi-Model Regression Engine (`Scikit-Learn / PyTorch KAN`)
 - **Primary Model (XGBoost Regressor)**: Fitted on BAIF field data, achieving 3.83% MAPE / 20.59 kg MAE.
-- **SOTA Model (Kolmogorov-Arnold Network - KAN)**: Learns B-spline univariate edge activation functions for physical volumetric equations ($W \approx \alpha \cdot G^2 \cdot L$).
-- **Schaeffer Baseline**: $W = \frac{G^2 \times L}{10838}$ for comparison.
+- **Innovation 3 (`ENABLE_DUAL_ANGLE`)**: `POST /api/predict_dual_angle` fuses side profile silhouette with 45° rear view barrel width via cross-attention and 3D Ramanujan-Schaeffer volumetric fitting ($W = \frac{G_{\text{fused}}^2 \times L}{10838.0}$).
+- **Innovation 5 (`ENABLE_KAN`)**: Pure NumPy Kolmogorov-Arnold Network B-spline univariate edge activation regressor for physical volumetric equations.
 
 ### Layer 6: Explainable AI & Client Presentation (`React + Vite / Streamlit`)
-- **SHAP Feature Attribution**: Uses `TreeExplainer` on the primary XGBoost regressor to compute exact marginal attributions for chest girth, silhouette area, body length, and withers height.
-- **Visual Saliency Heatmap Overlay**: Generates a JET/Plasma color-mapped visual overlay mapped onto anatomical regions (Ribcage, Abdomen, Withers, Rump) blended directly onto the cattle RGB photo, exported as Base64 JPEG (`xai_heatmap_b64`).
-- **XAI Visual Cards**: Renders interactive model explainability cards presenting feature impact rankings and benchmark confidence intervals ($N=15$ BAIF field cattle). Toggled via `ENABLE_XAI_CARDS` feature flag.
-
+- **Innovation 6 (`ENABLE_XAI_CARDS`)**: SHAP `TreeExplainer` feature attributions mapped onto visual saliency heatmaps over anatomical regions (Ribcage, Abdomen, Withers, Rump), returned as Base64 JPEG (`xai_heatmap_b64`).
 
 ---
 
 ## 3. Deferred Work
 
-### Keypoint Detector Upgrade (Innovation 2 Perspective Unwarper Dependency)
+### 1. Keypoint Detector Upgrade (Innovation 2 Perspective Unwarper Dependency)
 - **Status**: Deferred to post-roadmap implementation.
 - **Rationale**: Pre-flight audit revealed that the current heuristic landmark detector (`src/features/landmarks.py`) re-anchors search windows relative to silhouette bounding boxes, experiencing coordinate drift of **41.38 pixels at 15° rotation** and **78.57 pixels at 30° rotation**.
-- **Upgrade Requirement**: To reach full intended perspective unwarping accuracy without bounding box drift, Innovation 2's affine unwarper requires a trained deep keypoint neural network (e.g. HRNet, YOLOv8-Pose, or MobileNet-Pose) trained on annotated livestock anatomical landmarks.
+- **Upgrade Requirement**: Requires a trained deep keypoint neural network (e.g. HRNet, YOLOv8-Pose, or MobileNet-Pose) trained on annotated livestock anatomical landmarks.
 - **Production Status**: `ENABLE_PERSPECTIVE_UNWARP` defaults to `false` in `configs/features.yaml` until the keypoint model upgrade is completed.
 
+### 2. Dual-Angle XGBoost Retraining (Innovation 3 Multi-View Dependency)
+- **Status**: Deferred to post-roadmap dataset expansion.
+- **Rationale**: Retraining an XGBoost model specifically on dual-angle paired features requires a multi-view paired side+rear livestock dataset ($N > 100$).
+- **Current Production Path**: 3D Ramanujan-Schaeffer volumetric integration is the active baseline production path for `POST /api/predict_dual_angle`.
