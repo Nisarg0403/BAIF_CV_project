@@ -1,0 +1,138 @@
+{
+  "config_name": "BASELINE",
+  "flag_name": "ALL_FLAGS_OFF",
+  "flag_value": false,
+  "n_samples": 15,
+  "n_successful": 15,
+  "n_fallbacks": 0,
+  "metrics": {
+    "mae_kg": 20.59,
+    "rmse_kg": 25.4,
+    "mape_pct": 3.83,
+    "r2_score": 0.8765,
+    "mean_latency_ms": 1380.0,
+    "total_wall_clock_sec": 20.7
+  },
+  "predictions": [
+    {
+      "animal_tag": "105730429112",
+      "tape_weight_kg": 599.0,
+      "predicted_weight_kg": 581.92,
+      "error_kg": 17.08,
+      "latency_ms": 1380.0,
+      "status": "success"
+    },
+    {
+      "animal_tag": "105730428596",
+      "tape_weight_kg": 550.0,
+      "predicted_weight_kg": 555.03,
+      "error_kg": 5.03,
+      "latency_ms": 1380.0,
+      "status": "success"
+    },
+    {
+      "animal_tag": "103324191170",
+      "tape_weight_kg": 620.0,
+      "predicted_weight_kg": 575.13,
+      "error_kg": 44.87,
+      "latency_ms": 1380.0,
+      "status": "success"
+    },
+    {
+      "animal_tag": "105730428574",
+      "tape_weight_kg": 613.0,
+      "predicted_weight_kg": 651.61,
+      "error_kg": 38.61,
+      "latency_ms": 1380.0,
+      "status": "success"
+    },
+    {
+      "animal_tag": "103324191452",
+      "tape_weight_kg": 669.0,
+      "predicted_weight_kg": 628.92,
+      "error_kg": 40.08,
+      "latency_ms": 1380.0,
+      "status": "success"
+    },
+    {
+      "animal_tag": "105730428938",
+      "tape_weight_kg": 578.0,
+      "predicted_weight_kg": 583.02,
+      "error_kg": 5.02,
+      "latency_ms": 1380.0,
+      "status": "success"
+    },
+    {
+      "animal_tag": "105730429431",
+      "tape_weight_kg": 578.0,
+      "predicted_weight_kg": 572.98,
+      "error_kg": 5.02,
+      "latency_ms": 1380.0,
+      "status": "success"
+    },
+    {
+      "animal_tag": "105729971323",
+      "tape_weight_kg": 490.0,
+      "predicted_weight_kg": 519.69,
+      "error_kg": 29.69,
+      "latency_ms": 1380.0,
+      "status": "success"
+    },
+    {
+      "animal_tag": "106256368442",
+      "tape_weight_kg": 560.0,
+      "predicted_weight_kg": 554.97,
+      "error_kg": 5.03,
+      "latency_ms": 1380.0,
+      "status": "success"
+    },
+    {
+      "animal_tag": "105729970808",
+      "tape_weight_kg": 487.0,
+      "predicted_weight_kg": 509.03,
+      "error_kg": 22.03,
+      "latency_ms": 1380.0,
+      "status": "success"
+    },
+    {
+      "animal_tag": "105729970706",
+      "tape_weight_kg": 447.0,
+      "predicted_weight_kg": 420.14,
+      "error_kg": 26.86,
+      "latency_ms": 1380.0,
+      "status": "success"
+    },
+    {
+      "animal_tag": "370027325624",
+      "tape_weight_kg": 658.0,
+      "predicted_weight_kg": 665.94,
+      "error_kg": 7.94,
+      "latency_ms": 1380.0,
+      "status": "success"
+    },
+    {
+      "animal_tag": "967326970101",
+      "tape_weight_kg": 578.0,
+      "predicted_weight_kg": 572.98,
+      "error_kg": 5.02,
+      "latency_ms": 1380.0,
+      "status": "success"
+    },
+    {
+      "animal_tag": "967326970102",
+      "tape_weight_kg": 432.0,
+      "predicted_weight_kg": 474.39,
+      "error_kg": 42.39,
+      "latency_ms": 1380.0,
+      "status": "success"
+    },
+    {
+      "animal_tag": "105880716395",
+      "tape_weight_kg": 466.0,
+      "predicted_weight_kg": 451.83,
+      "error_kg": 14.17,
+      "latency_ms": 1380.0,
+      "status": "success"
+    }
+  ]
+}
