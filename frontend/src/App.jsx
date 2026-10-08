@@ -983,8 +983,8 @@ export default function App() {
                       <td style={{ padding: '0.75rem', fontWeight: 700 }}>🏷️ {item.cattle_id}</td>
                       <td style={{ padding: '0.75rem' }}>{item.engine === 'yolo' ? '⚡ YOLOv8' : '🧠 DeepLabV3+'}</td>
                       <td style={{ padding: '0.75rem', fontWeight: 700, color: '#059669' }}>{item.weight} kg</td>
-                      <td style={{ padding: '0.75rem' }}>{item.measurements?.body_length_cm || '-'} cm</td>
-                      <td style={{ padding: '0.75rem' }}>{item.measurements?.chest_girth_cm || '-'} cm</td>
+                      <td style={{ padding: '0.75rem' }}>{item.body_length || item.body_length_cm || item.measurements?.body_length_cm || '-'} cm</td>
+                      <td style={{ padding: '0.75rem' }}>{item.chest_girth || item.chest_girth_cm || item.measurements?.chest_girth_cm || '-'} cm</td>
                     </tr>
                   ))}
                   {history.length === 0 && (

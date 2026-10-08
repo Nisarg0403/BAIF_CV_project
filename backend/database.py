@@ -245,6 +245,13 @@ def get_all_predictions(limit: int = 50) -> List[Dict[str, Any]]:
                     "height_at_withers": withers_h,
                     "height_at_stature": stature_h,
                     "silhouette_area": sil_area,
+                    "measurements": {
+                        "body_length_cm": body_len,
+                        "chest_girth_cm": chest_g,
+                        "withers_height_cm": withers_h,
+                        "stature_height_cm": stature_h,
+                        "silhouette_area_cm2": sil_area
+                    },
                     "image_url": r.get("image_url")
                 })
             return formatted
