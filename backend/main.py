@@ -11,6 +11,7 @@ os.environ["NUMEXPR_NUM_THREADS"] = "1"
 import json
 import uuid
 import base64
+import re
 import numpy as np
 from datetime import datetime
 from typing import Optional, List
@@ -23,11 +24,83 @@ from starlette.staticfiles import StaticFiles
 from pydantic import BaseModel
 from pathlib import Path
 
+def clean_cattle_tag(raw_tag: Optional[str]) -> str:
+    """
+    Cleans a tag string by:
+    1. Stripping file extensions (.jpg, .jpeg, .png, .mp4, .mov, .webm, etc.)
+    2. Stripping view/part/number suffixes (_Back_1, _Back, _LL_1, -LR, _left_2, _right_1, _1, _2, etc.)
+    3. Stripping trailing/leading whitespace.
+    """
+    if not raw_tag:
+        return ""
+    
+    # 1. Strip extension and whitespace using stdlib Path.stem
+    tag_str = Path(str(raw_tag).strip()).stem.strip()
+    
+    # 2. Iteratively strip view/part/number suffixes anchored at the end of the string
+    suffix_pattern = re.compile(r'[_\-\s]+(?:LL|LR|back|rear|left|right|side|front|profile)(?:[_\-\s]+\d+)?\s*$', re.IGNORECASE)
+    idx_pattern = re.compile(r'[_\-\s]+\d{1,2}\s*$', re.IGNORECASE)
+    
+    while True:
+        new_tag = suffix_pattern.sub('', tag_str).strip()
+        new_tag = idx_pattern.sub('', new_tag).strip()
+        if new_tag == tag_str or len(new_tag) == 0:
+            break
+        tag_str = new_tag
+
+    GENERIC_STEMS = {
+        "image", "photo", "upload", "file", "blob", "left", "right", "rear", "back", "side", "front",
+        "video", "frame", "captured", "input", "test", "temp", "sample", "unknown", "cattle_snap",
+        "ll", "lr", "side_file", "left_file", "right_file", "rear_file", "profile", "tag"
+    }
+
+    if tag_str.lower() in GENERIC_STEMS or len(tag_str) == 0:
+        return ""
+
+    return tag_str
+
+def derive_cattle_tag_from_request(
+    form_cattle_id: Optional[str],
+    *files: Optional[UploadFile]
+) -> str:
+    """
+    Auto-extracts cattle tag ID from uploaded image/video filenames or form_cattle_id.
+    Strips file extensions and part suffixes (_LL, _LR, _back, _side, etc.).
+    """
+    GENERIC_STEMS = {
+        "image", "photo", "upload", "file", "blob", "left", "right", "rear", "back", "side", "front",
+        "video", "frame", "captured", "input", "test", "temp", "sample", "unknown", "cattle_snap",
+        "ll", "lr", "side_file", "left_file", "right_file", "rear_file", "profile", "tag"
+    }
+
+    # 1. Check filenames from uploaded files first
+    for file in files:
+        if file and file.filename:
+            stem = clean_cattle_tag(file.filename)
+            if stem and stem.lower() not in GENERIC_STEMS:
+                return stem
+
+    # 2. Check form_cattle_id if passed
+    if form_cattle_id and form_cattle_id.strip():
+        cleaned_form = clean_cattle_tag(form_cattle_id)
+        if cleaned_form and cleaned_form.lower() not in GENERIC_STEMS:
+            return cleaned_form
+
+    # 3. Dynamic fallback tag if no tag provided or extractable
+    return f"TAG-{int(datetime.now().timestamp()) % 100000:05d}"
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.inference import process_image_file, get_effective_feature_flags
+from backend.database import (
+    save_prediction_record,
+    get_all_predictions,
+    delete_prediction_record,
+    save_ground_truth_feedback,
+    is_supabase_enabled
+)
 
 def extract_request_feature_flags(
     x_feature_flags: Optional[str] = None,
@@ -70,20 +143,11 @@ def extract_request_feature_flags(
 
     return overrides
 
+import logging
+logger = logging.getLogger("CattleWeightAI")
+
 def audit_log_flags(endpoint: str, effective_flags: dict):
-    timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    log_dir = os.path.join(PROJECT_ROOT, "logs", "experimental")
-    os.makedirs(log_dir, exist_ok=True)
-    log_file = os.path.join(log_dir, f"request_flags_{timestamp_str}.log")
-    try:
-        with open(log_file, "w", encoding="utf-8") as f:
-            f.write(f"Timestamp: {datetime.now().isoformat()}\n")
-            f.write(f"Endpoint: {endpoint}\n")
-            f.write("Effective Feature Flags:\n")
-            for k, v in sorted(effective_flags.items()):
-                f.write(f"  {k}: {v}\n")
-    except Exception as e:
-        print(f"Warning writing flag audit log: {e}")
+    logger.info(f"Endpoint: {endpoint} | Effective Flags: {effective_flags}")
 
 app = FastAPI(
     title="CattleWeightAI API",
@@ -108,27 +172,13 @@ os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
 # Serve uploaded images statically
 app.mount("/static/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
-def load_history():
-    if not os.path.exists(HISTORY_FILE):
-        return []
-    try:
-        with open(HISTORY_FILE, "r") as f:
-            return json.load(f)
-    except Exception:
-        return []
-
-def save_history_entry(entry):
-    history = load_history()
-    history.insert(0, entry)
-    with open(HISTORY_FILE, "w") as f:
-        json.dump(history, f, indent=2)
-
 @app.get("/api/health")
 def health_check():
     return {
         "status": "online",
         "service": "CattleWeightAI Neural Engine",
         "version": "2.4.0",
+        "database_backend": "Supabase Cloud DB" if is_supabase_enabled() else "Local JSON Fallback",
         "timestamp": datetime.now().isoformat()
     }
 
@@ -165,7 +215,7 @@ async def predict_cattle_weight(
     left_file: UploadFile = File(None),
     right_file: UploadFile = File(None),
     rear_file: UploadFile = File(None),
-    cattle_id: str = Form("TAG-105730429112"),
+    cattle_id: str = Form(""),
     model_engine: str = Form("deeplab"),
     side_name: str = Form("Left Side Profile"),
     feature_flags_form: Optional[str] = Form(None),
@@ -190,6 +240,8 @@ async def predict_cattle_weight(
         )
         effective_flags = get_effective_feature_flags(request_overrides)
         audit_log_flags("/api/predict", effective_flags)
+
+        derived_cattle_id = derive_cattle_tag_from_request(cattle_id, left_file, right_file, rear_file, file)
 
         results_by_side = {}
         primary_file_bytes = None
@@ -248,22 +300,23 @@ async def predict_cattle_weight(
         primary_res = results_by_side.get("left") or results_by_side.get("right") or list(results_by_side.values())[0]
         primary_res["weight_kg"] = avg_weight  # Angle-averaged weight
 
-        # Log history entry
-        log_entry = {
-            "id": pred_id,
-            "cattle_id": cattle_id,
-            "timestamp": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
-            "engine": model_engine,
-            "weight": avg_weight,
-            "confidence_pct": primary_res["confidence_pct"],
-            "measurements": primary_res["measurements"]
-        }
-        save_history_entry(log_entry)
+        # Log history entry to Database / Storage
+        log_entry = save_prediction_record(
+            pred_id=pred_id,
+            cattle_id=derived_cattle_id,
+            engine=model_engine,
+            weight_kg=avg_weight,
+            confidence_pct=primary_res["confidence_pct"],
+            measurements=primary_res["measurements"],
+            predictions_by_view=results_by_side,
+            image_bytes=primary_file_bytes,
+            image_filename=f"pred_{pred_id}.jpg"
+        )
 
         return {
             "success": True,
             "id": pred_id,
-            "cattle_id": cattle_id,
+            "cattle_id": derived_cattle_id,
             "timestamp": log_entry["timestamp"],
             "image_data_url": primary_data_url,
             "prediction": primary_res,
@@ -276,7 +329,7 @@ async def predict_cattle_weight(
 @app.post("/api/predict_video")
 async def predict_cattle_weight_video(
     video_file: UploadFile = File(...),
-    cattle_id: str = Form("TAG-105730429112"),
+    cattle_id: str = Form(""),
     model_engine: str = Form("deeplab"),
     feature_flags_form: Optional[str] = Form(None),
     x_feature_flags: Optional[str] = Header(None),
@@ -358,21 +411,23 @@ async def predict_cattle_weight_video(
     if fallback_warning:
         res["warning"] = fallback_warning
 
-    log_entry = {
-        "id": pred_id,
-        "cattle_id": cattle_id,
-        "timestamp": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
-        "engine": model_engine,
-        "weight": res["weight_kg"],
-        "confidence_pct": res["confidence_pct"],
-        "measurements": res["measurements"]
-    }
-    save_history_entry(log_entry)
+    derived_cattle_id = derive_cattle_tag_from_request(cattle_id, video_file)
+
+    log_entry = save_prediction_record(
+        pred_id=pred_id,
+        cattle_id=derived_cattle_id,
+        engine=model_engine,
+        weight_kg=res["weight_kg"],
+        confidence_pct=res["confidence_pct"],
+        measurements=res["measurements"],
+        image_bytes=img_bytes,
+        image_filename=f"pred_vid_{pred_id}.jpg"
+    )
 
     return {
         "success": True,
         "id": pred_id,
-        "cattle_id": cattle_id,
+        "cattle_id": derived_cattle_id,
         "timestamp": log_entry["timestamp"],
         "image_data_url": data_url,
         "prediction": res,
@@ -382,7 +437,7 @@ async def predict_cattle_weight_video(
 @app.post("/api/predict_kan")
 async def predict_cattle_weight_kan(
     file: UploadFile = File(None),
-    cattle_id: str = Form("TAG-105730429112"),
+    cattle_id: str = Form(""),
     model_engine: str = Form("deeplab"),
     feature_flags_form: Optional[str] = Form(None),
     x_feature_flags: Optional[str] = Header(None),
@@ -447,10 +502,12 @@ async def predict_cattle_weight_kan(
     data_url = f"data:image/jpeg;base64,{b64_img}"
     pred_id = str(uuid.uuid4())[:8]
 
+    derived_cattle_id = derive_cattle_tag_from_request(cattle_id, file)
+
     return {
         "success": True,
         "id": pred_id,
-        "cattle_id": cattle_id,
+        "cattle_id": derived_cattle_id,
         "timestamp": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
         "image_data_url": data_url,
         "prediction": res,
@@ -460,7 +517,7 @@ async def predict_cattle_weight_kan(
 @app.post("/api/predict_ensemble")
 async def predict_cattle_weight_ensemble(
     file: UploadFile = File(None),
-    cattle_id: str = Form("TAG-105730429112"),
+    cattle_id: str = Form(""),
     model_engine: str = Form("deeplab"),
     alpha: float = Form(1.0),
     feature_flags_form: Optional[str] = Form(None),
@@ -526,10 +583,12 @@ async def predict_cattle_weight_ensemble(
     data_url = f"data:image/jpeg;base64,{b64_img}"
     pred_id = str(uuid.uuid4())[:8]
 
+    derived_cattle_id = derive_cattle_tag_from_request(cattle_id, file)
+
     return {
         "success": True,
         "id": pred_id,
-        "cattle_id": cattle_id,
+        "cattle_id": derived_cattle_id,
         "timestamp": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
         "image_data_url": data_url,
         "prediction": res,
@@ -542,7 +601,7 @@ async def predict_cattle_weight_dual_angle(
     rear_file: UploadFile = File(None),
     left_file: UploadFile = File(None),
     file: UploadFile = File(None),
-    cattle_id: str = Form("TAG-105730429112"),
+    cattle_id: str = Form(""),
     model_engine: str = Form("deeplab"),
     feature_flags_form: Optional[str] = Form(None),
     x_feature_flags: Optional[str] = Header(None),
@@ -636,21 +695,23 @@ async def predict_cattle_weight_dual_angle(
     data_url = f"data:image/jpeg;base64,{b64_img}"
     pred_id = str(uuid.uuid4())[:8]
 
-    log_entry = {
-        "id": pred_id,
-        "cattle_id": cattle_id,
-        "timestamp": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
-        "engine": model_engine,
-        "weight": res_side["weight_kg"],
-        "confidence_pct": res_side["confidence_pct"],
-        "measurements": res_side["measurements"]
-    }
-    save_history_entry(log_entry)
+    derived_cattle_id = derive_cattle_tag_from_request(cattle_id, side_file, left_file, file)
+
+    log_entry = save_prediction_record(
+        pred_id=pred_id,
+        cattle_id=derived_cattle_id,
+        engine=model_engine,
+        weight_kg=res_side["weight_kg"],
+        confidence_pct=res_side["confidence_pct"],
+        measurements=res_side["measurements"],
+        image_bytes=side_bytes,
+        image_filename=f"pred_dual_{pred_id}.jpg"
+    )
 
     return {
         "success": True,
         "id": pred_id,
-        "cattle_id": cattle_id,
+        "cattle_id": derived_cattle_id,
         "timestamp": log_entry["timestamp"],
         "image_data_url": data_url,
         "prediction": res_side,
@@ -662,14 +723,35 @@ async def predict_cattle_weight_dual_angle(
 
 @app.get("/api/history")
 def get_prediction_history():
-    return {"success": True, "history": load_history()}
+    return {"success": True, "history": get_all_predictions()}
 
 @app.delete("/api/history/{entry_id}")
-def delete_history_entry(entry_id: str):
-    history = load_history()
-    updated = [item for item in history if item["id"] != entry_id]
-    with open(HISTORY_FILE, "w") as f:
-        json.dump(updated, f, indent=2)
+def delete_history_entry_endpoint(entry_id: str):
+    success = delete_prediction_record(entry_id)
+    return {"success": success, "deleted_id": entry_id}
+
+class GroundTruthRequest(BaseModel):
+    cattle_id: str
+    actual_weight_kg: float
+    measured_by: Optional[str] = "BAIF Technician"
+    notes: Optional[str] = None
+
+@app.post("/api/ground_truth")
+def submit_ground_truth(req: GroundTruthRequest):
+    """
+    Submits scale-weighed cattle ground truth data from BAIF field agents.
+    Stored in DB for dataset accumulation and model retraining.
+    """
+    cleaned_id = clean_cattle_tag(req.cattle_id)
+    success = save_ground_truth_feedback(
+        cattle_id=cleaned_id,
+        actual_weight_kg=req.actual_weight_kg,
+        measured_by=req.measured_by or "BAIF Technician",
+        notes=req.notes or ""
+    )
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to save ground truth record.")
+    return {"success": True, "message": f"Ground truth recorded for cattle {cleaned_id}"}
 FRONTEND_DIST = os.path.join(PROJECT_ROOT, "frontend", "dist")
 if os.path.exists(FRONTEND_DIST):
     # Mount assets folder if present

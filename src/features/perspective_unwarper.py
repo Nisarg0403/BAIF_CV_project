@@ -45,17 +45,10 @@ def unwarp_mask(mask: np.ndarray, landmarks: dict) -> Tuple[np.ndarray, Dict[str
 
     # Requirement C: Fallback when keypoints are unreliable (< 6 of 8 landmarks detected)
     if len(valid_pts) < 6:
-        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        fallback_log = os.path.join(LOG_DIR, f"fallback_unwarp_{timestamp_str}.log")
-        try:
-            with open(fallback_log, "w", encoding="utf-8") as f_log:
-                f_log.write(f"Unwarp fallback triggered: Only {len(valid_pts)}/8 landmarks detected.\n")
-        except Exception:
-            pass
-
         metadata["unwarp_applied"] = False
         metadata["reason"] = "insufficient_landmarks"
         logger.warning(f"Unwarp skipped: insufficient landmarks ({len(valid_pts)}/8). Returning original mask.")
+        return mask.copy(), metadata
         return mask.copy(), metadata
 
     try:

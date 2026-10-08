@@ -1,0 +1,17 @@
+.git
+.gitignore
+.venv
+frontend/node_modules
+frontend/dist
+data/processed
+data/raw
+logs
+notebooks
+results
+scratch
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.vscode

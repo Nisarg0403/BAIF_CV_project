@@ -1,26 +1,41 @@
-# Datasets & Models (Ignore large raw datasets, keep trained model weights)
+# Datasets (Ignore raw datasets, keep schema)
 data/
 data/*
-!models/*.pkl
+!data/supabase_schema.sql
 results/
 *.xlsx
 *.csv
 
-# Python Cache
+# Model Weights (Keep trained lightweight models)
+!models/*.pkl
+!models/experimental/*.pkl
+!yolov8n-seg.pt
+
+# Python & Runtime Cache
 __pycache__/
 *.py[cod]
 *$py.class
 .ipynb_checkpoints/
 .pytest_cache/
 
-# Environments
+# Environments & Secrets
 .env
-.venv
+.env.*
+!.env.example
+.venv/
 env/
 venv/
 ENV/
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Logs & Temporary Scratch
+logs/
+scratch/
+.vscode/
+
 # OS files
 .DS_Store
 Thumbs.db
-!yolov8n-seg.pt

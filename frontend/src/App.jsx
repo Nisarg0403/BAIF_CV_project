@@ -30,7 +30,7 @@ import LiveCameraModal from './components/LiveCameraModal';
 export default function App() {
   const [activeTab, setActiveTab] = useState('predict');
   const [engine, setEngine] = useState('deeplab');
-  const [cattleId, setCattleId] = useState('TAG-105730429112');
+  const [cattleId, setCattleId] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   
@@ -84,8 +84,41 @@ export default function App() {
     }
   };
 
+  const extractTagFromFilename = (filename) => {
+    if (!filename) return null;
+    let stem = filename.replace(/\.[^/.]+$/, '').trim();
+    stem = stem.replace(/\.(jpg|jpeg|png|webp|bmp|gif|mp4|mov|avi|mkv|webm|flv|m4v|3gp|heic|tiff)$/i, '').trim();
+    
+    // Iteratively strip part/view/number suffixes anchored at the end (e.g. _LR_1, _Back_1, _LL_2, _1, _2)
+    const suffixPattern = /[_\-\s]+(?:LL|LR|back|rear|left|right|side|front|profile)(?:[_\-\s]+\d+)?$/i;
+    const idxPattern = /[_\-\s]+\d{1,2}$/i;
+
+    let previous = '';
+    while (stem !== previous && stem.length > 0) {
+      previous = stem;
+      stem = stem.replace(suffixPattern, '').trim();
+      stem = stem.replace(idxPattern, '').trim();
+    }
+    stem = stem.trim();
+
+    const genericNames = new Set([
+      'image', 'photo', 'upload', 'file', 'blob', 'left', 'right', 'rear', 'back', 'side', 'front',
+      'video', 'frame', 'captured', 'input', 'test', 'temp', 'sample', 'unknown',
+      'cattle_snap', 'll', 'lr', 'side_file', 'left_file', 'right_file', 'rear_file', 'profile', 'tag'
+    ]);
+
+    if (genericNames.has(stem.toLowerCase()) || stem.length === 0) {
+      return null;
+    }
+    return stem;
+  };
+
   const handlePhotoSelect = (side, file) => {
     if (file) {
+      const autoTag = extractTagFromFilename(file.name);
+      if (autoTag) {
+        setCattleId(autoTag);
+      }
       const url = URL.createObjectURL(file);
       setPhotos(prev => ({
         ...prev,
@@ -97,6 +130,10 @@ export default function App() {
   // Direct Mobile Camera Capture with Instant Auto-Run AI Feed
   const handleDirectCameraCapture = (side, file) => {
     if (!file) return;
+    const autoTag = extractTagFromFilename(file.name);
+    if (autoTag) {
+      setCattleId(autoTag);
+    }
     const url = URL.createObjectURL(file);
     const updatedPhotos = {
       ...photos,
@@ -121,13 +158,25 @@ export default function App() {
     setErrorMsg(null);
 
     try {
-      let endpoint = `${API_BASE}/api/predict`;
-      const formData = new FormData();
-      formData.append('cattle_id', cattleId);
-      formData.append('model_engine', engine);
-
       const isPhotoObject = customPhotos && (customPhotos.left !== undefined || customPhotos.right !== undefined || customPhotos.rear !== undefined);
       const targetPhotos = isPhotoObject ? customPhotos : photos;
+
+      let effectiveTag = cattleId;
+      if (!effectiveTag) {
+        const primaryFile = targetPhotos.left?.file || targetPhotos.right?.file || targetPhotos.rear?.file;
+        if (primaryFile) {
+          const autoTag = extractTagFromFilename(primaryFile.name);
+          if (autoTag) {
+            effectiveTag = autoTag;
+            setCattleId(autoTag);
+          }
+        }
+      }
+
+      let endpoint = `${API_BASE}/api/predict`;
+      const formData = new FormData();
+      formData.append('cattle_id', effectiveTag || '');
+      formData.append('model_engine', engine);
 
       if (enableVideo) {
         if (!videoFile) {
@@ -387,7 +436,14 @@ export default function App() {
                           <input 
                             type="file"
                             accept="video/mp4,video/webm,.mp4,.webm"
-                            onChange={(e) => setVideoFile(e.target.files[0])}
+                            onChange={(e) => {
+                              const file = e.target.files[0];
+                              setVideoFile(file);
+                              if (file) {
+                                const autoTag = extractTagFromFilename(file.name);
+                                if (autoTag) setCattleId(autoTag);
+                              }
+                            }}
                             style={{ fontSize: '0.8rem' }}
                           />
                           {videoFile && <span style={{ fontSize: '0.75rem', color: '#059669', marginLeft: '0.5rem', fontWeight: 600 }}>Selected: {videoFile.name}</span>}
@@ -430,7 +486,14 @@ export default function App() {
                             <input 
                               type="file" 
                               accept="image/*"
-                              onChange={(e) => setDualSideFile(e.target.files[0])}
+                              onChange={(e) => {
+                                const file = e.target.files[0];
+                                setDualSideFile(file);
+                                if (file) {
+                                  const autoTag = extractTagFromFilename(file.name);
+                                  if (autoTag) setCattleId(autoTag);
+                                }
+                              }}
                               style={{ fontSize: '0.78rem' }}
                             />
                             {dualSideFile && <span style={{ fontSize: '0.72rem', color: '#059669', marginLeft: '0.4rem' }}>{dualSideFile.name}</span>}
@@ -440,7 +503,14 @@ export default function App() {
                             <input 
                               type="file" 
                               accept="image/*"
-                              onChange={(e) => setDualRearFile(e.target.files[0])}
+                              onChange={(e) => {
+                                const file = e.target.files[0];
+                                setDualRearFile(file);
+                                if (file) {
+                                  const autoTag = extractTagFromFilename(file.name);
+                                  if (autoTag) setCattleId(autoTag);
+                                }
+                              }}
                               style={{ fontSize: '0.78rem' }}
                             />
                             {dualRearFile && <span style={{ fontSize: '0.72rem', color: '#059669', marginLeft: '0.4rem' }}>{dualRearFile.name}</span>}
@@ -520,8 +590,11 @@ export default function App() {
                 <input 
                   type="text" 
                   value={cattleId}
-                  onChange={(e) => setCattleId(e.target.value)}
-                  placeholder="e.g. TAG-105730429112"
+                  onChange={(e) => {
+                    const cleanVal = e.target.value.replace(/\.(jpg|jpeg|png|webp|bmp|gif|mp4|mov|avi|mkv|webm|flv|m4v|3gp|heic|tiff)$/i, '');
+                    setCattleId(cleanVal);
+                  }}
+                  placeholder="e.g. 105730428938"
                   style={{ padding: '0.4rem 0.75rem', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.85rem', fontWeight: 600, width: '220px' }}
                 />
               </div>
