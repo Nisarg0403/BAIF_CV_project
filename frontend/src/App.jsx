@@ -281,8 +281,13 @@ export default function App() {
 
   return (
     <div className="app-container">
-      {/* Left Sidebar */}
-      <aside className="sidebar">
+      {/* Mobile Drawer Backdrop Overlay */}
+      {isMobileMenuOpen && (
+        <div className="sidebar-backdrop" onClick={() => setIsMobileMenuOpen(false)}></div>
+      )}
+
+      {/* Left Sidebar / Off-Canvas Mobile Drawer */}
+      <aside className={`sidebar ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
         <div>
           <div className="brand-header">
             <div className="brand-logo-icon">
@@ -297,7 +302,7 @@ export default function App() {
           <nav className="nav-menu">
             <button 
               className={`nav-item ${activeTab === 'predict' ? 'active' : ''}`}
-              onClick={() => setActiveTab('predict')}
+              onClick={() => { setActiveTab('predict'); setIsMobileMenuOpen(false); }}
             >
               <Home size={18} />
               <span>Predict Weight</span>
@@ -305,7 +310,7 @@ export default function App() {
 
             <button 
               className={`nav-item ${activeTab === 'history' ? 'active' : ''}`}
-              onClick={() => setActiveTab('history')}
+              onClick={() => { setActiveTab('history'); setIsMobileMenuOpen(false); }}
             >
               <Clock size={18} />
               <span>History</span>
@@ -313,7 +318,7 @@ export default function App() {
 
             <button 
               className={`nav-item ${activeTab === 'herd' ? 'active' : ''}`}
-              onClick={() => setActiveTab('herd')}
+              onClick={() => { setActiveTab('herd'); setIsMobileMenuOpen(false); }}
             >
               <Users size={18} />
               <span>Herd Management</span>
@@ -321,7 +326,7 @@ export default function App() {
 
             <button 
               className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`}
-              onClick={() => setActiveTab('analytics')}
+              onClick={() => { setActiveTab('analytics'); setIsMobileMenuOpen(false); }}
             >
               <BarChart3 size={18} />
               <span>Analytics</span>
@@ -329,7 +334,7 @@ export default function App() {
 
             <button 
               className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
-              onClick={() => setActiveTab('settings')}
+              onClick={() => { setActiveTab('settings'); setIsMobileMenuOpen(false); }}
             >
               <Settings size={18} />
               <span>Settings</span>
@@ -346,7 +351,16 @@ export default function App() {
       <div className="main-wrapper">
         {/* Top Header Bar */}
         <header className="top-header">
-          <div className="breadcrumb-path"></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <button 
+              className="mobile-menu-toggle"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              aria-label="Toggle navigation menu"
+            >
+              {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+            <div className="breadcrumb-path"></div>
+          </div>
 
           <div className="top-actions">
             {/* Active Model Engine Switcher */}
@@ -585,17 +599,17 @@ export default function App() {
               </div>
 
               {/* Tag Input */}
-              <div style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div className="tag-input-row">
                 <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--slate-dark)' }}>🏷️ Cattle Tag ID:</span>
                 <input 
                   type="text" 
+                  className="tag-input-field"
                   value={cattleId}
                   onChange={(e) => {
                     const cleanVal = e.target.value.replace(/\.(jpg|jpeg|png|webp|bmp|gif|mp4|mov|avi|mkv|webm|flv|m4v|3gp|heic|tiff)$/i, '');
                     setCattleId(cleanVal);
                   }}
                   placeholder="e.g. 105730428938"
-                  style={{ padding: '0.4rem 0.75rem', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.85rem', fontWeight: 600, width: '220px' }}
                 />
               </div>
 
@@ -604,7 +618,7 @@ export default function App() {
                 <p style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--slate-dark)', marginBottom: '0.5rem' }}>
                   📸 Multi-View Image Acquisition Stepper (3 Views)
                 </p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+                <div className="stepper-grid">
                   <div style={{
                     padding: '0.6rem 0.8rem', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 600,
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -641,7 +655,7 @@ export default function App() {
               </div>
 
               {/* View Tabs */}
-              <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid #E2E8F0', marginBottom: '1rem' }}>
+              <div className="view-tabs-container">
                 <button 
                   onClick={() => setActiveViewTab('left')}
                   style={{
@@ -965,37 +979,39 @@ export default function App() {
               <h2 className="panel-title">Cattle Weight Prediction History Log</h2>
               <p className="panel-subtitle">Saved biometric records and AI predictions stored in database.</p>
 
-              <table className="meas-table" style={{ marginTop: '1rem' }}>
-                <thead>
-                  <tr style={{ background: '#F8FAFC', textAlign: 'left', fontSize: '0.8rem', color: '#64748B' }}>
-                    <th style={{ padding: '0.75rem' }}>Timestamp</th>
-                    <th style={{ padding: '0.75rem' }}>Cattle Tag ID</th>
-                    <th style={{ padding: '0.75rem' }}>Engine Used</th>
-                    <th style={{ padding: '0.75rem' }}>Est. Weight</th>
-                    <th style={{ padding: '0.75rem' }}>Body Length</th>
-                    <th style={{ padding: '0.75rem' }}>Chest Girth</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.map((item) => (
-                    <tr key={item.id}>
-                      <td style={{ padding: '0.75rem' }}>{item.timestamp}</td>
-                      <td style={{ padding: '0.75rem', fontWeight: 700 }}>🏷️ {item.cattle_id}</td>
-                      <td style={{ padding: '0.75rem' }}>{item.engine === 'yolo' ? '⚡ YOLOv8' : '🧠 DeepLabV3+'}</td>
-                      <td style={{ padding: '0.75rem', fontWeight: 700, color: '#059669' }}>{item.weight} kg</td>
-                      <td style={{ padding: '0.75rem' }}>{item.body_length || item.body_length_cm || item.measurements?.body_length_cm || '-'} cm</td>
-                      <td style={{ padding: '0.75rem' }}>{item.chest_girth || item.chest_girth_cm || item.measurements?.chest_girth_cm || '-'} cm</td>
+              <div className="table-responsive" style={{ marginTop: '1rem' }}>
+                <table className="meas-table">
+                  <thead>
+                    <tr style={{ background: '#F8FAFC', textAlign: 'left', fontSize: '0.8rem', color: '#64748B' }}>
+                      <th style={{ padding: '0.75rem' }}>Timestamp</th>
+                      <th style={{ padding: '0.75rem' }}>Cattle Tag ID</th>
+                      <th style={{ padding: '0.75rem' }}>Engine Used</th>
+                      <th style={{ padding: '0.75rem' }}>Est. Weight</th>
+                      <th style={{ padding: '0.75rem' }}>Body Length</th>
+                      <th style={{ padding: '0.75rem' }}>Chest Girth</th>
                     </tr>
-                  ))}
-                  {history.length === 0 && (
-                    <tr>
-                      <td colSpan={6} style={{ padding: '2rem', textAlign: 'center', color: '#94A3B8' }}>
-                        No historical prediction records found. Run a prediction to populate history.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {history.map((item) => (
+                      <tr key={item.id}>
+                        <td style={{ padding: '0.75rem' }}>{item.timestamp}</td>
+                        <td style={{ padding: '0.75rem', fontWeight: 700 }}>🏷️ {item.cattle_id}</td>
+                        <td style={{ padding: '0.75rem' }}>{item.engine === 'yolo' ? '⚡ YOLOv8' : '🧠 DeepLabV3+'}</td>
+                        <td style={{ padding: '0.75rem', fontWeight: 700, color: '#059669' }}>{item.weight} kg</td>
+                        <td style={{ padding: '0.75rem' }}>{item.body_length || item.body_length_cm || item.measurements?.body_length_cm || '-'} cm</td>
+                        <td style={{ padding: '0.75rem' }}>{item.chest_girth || item.chest_girth_cm || item.measurements?.chest_girth_cm || '-'} cm</td>
+                      </tr>
+                    ))}
+                    {history.length === 0 && (
+                      <tr>
+                        <td colSpan={6} style={{ padding: '2rem', textAlign: 'center', color: '#94A3B8' }}>
+                          No historical prediction records found. Run a prediction to populate history.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </section>
           </main>
         )}

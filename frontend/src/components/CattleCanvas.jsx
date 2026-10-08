@@ -19,9 +19,9 @@ export default function CattleCanvas({
     const ctx = canvas.getContext('2d');
     const container = canvas.parentElement;
 
-    // Use fixed container height 480px and measured width
+    // Responsive canvas dimensions (adaptive aspect ratio for mobile vs desktop)
     const containerW = container ? container.clientWidth || 700 : 700;
-    const containerH = 480;
+    const containerH = containerW < 600 ? Math.min(360, Math.max(240, Math.round(containerW * 0.65))) : 480;
 
     canvas.width = containerW;
     canvas.height = containerH;
